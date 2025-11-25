@@ -55,6 +55,7 @@
 #include "pointer-warp-v1-client-protocol.h"
 #include "text-input-unstable-v1-client-protocol.h"
 #include "text-input-unstable-v3-client-protocol.h"
+#include "color-management-v1-client-protocol.h"
 
 // NOTE: Versions of wayland-scanner prior to 1.17.91 named every global array of
 //       wl_interface pointers 'types', making it impossible to combine several unmodified
@@ -89,6 +90,10 @@
 #include "fractional-scale-v1-client-protocol-code.h"
 #undef types
 
+#define types _glfw_color_management_types
+#include "color-management-v1-client-protocol-code.h"
+#undef types
+
 #define types _glfw_xdg_activation_types
 #include "xdg-activation-v1-client-protocol-code.h"
 #undef types
@@ -119,6 +124,89 @@ static void wmBaseHandlePing(void* userData,
 static const struct xdg_wm_base_listener wmBaseListener =
 {
     wmBaseHandlePing
+};
+
+void colorManagerHandleSupportedIntent(void *userData, struct wp_color_manager_v1 *color_manager, uint32_t render_intent)
+{
+    _GLFWlibraryWayland* wl = userData;
+    if (render_intent >= sizeof(wl->colorManagerSupport.intents) / sizeof(wl->colorManagerSupport.intents[0]))
+    {
+        printf("Wayland: Unsupported render intent %d\n", render_intent);
+        return;
+    }
+
+    wl->colorManagerSupport.intents[render_intent] = GLFW_TRUE;
+}
+
+void colorManagerHandleSupportedFeature(void *userData, struct wp_color_manager_v1 *color_manager, uint32_t feature)
+{
+    _GLFWlibraryWayland* wl = userData;
+
+    switch (feature) {
+    case WP_COLOR_MANAGER_V1_FEATURE_ICC_V2_V4:
+        wl->colorManagerSupport.icc = GLFW_TRUE;
+        break;
+    case WP_COLOR_MANAGER_V1_FEATURE_PARAMETRIC:
+        wl->colorManagerSupport.parametric = GLFW_TRUE;
+        break;
+    case WP_COLOR_MANAGER_V1_FEATURE_SET_PRIMARIES:
+        wl->colorManagerSupport.setPrimaries = GLFW_TRUE;
+        break;
+    case WP_COLOR_MANAGER_V1_FEATURE_SET_TF_POWER:
+        wl->colorManagerSupport.setTfPower = GLFW_TRUE;
+        break;
+    case WP_COLOR_MANAGER_V1_FEATURE_SET_LUMINANCES:
+        wl->colorManagerSupport.setLuminance = GLFW_TRUE;
+        break;
+    case WP_COLOR_MANAGER_V1_FEATURE_SET_MASTERING_DISPLAY_PRIMARIES:
+        wl->colorManagerSupport.setMasteringDisplayPrimaries = GLFW_TRUE;
+        break;
+    case WP_COLOR_MANAGER_V1_FEATURE_EXTENDED_TARGET_VOLUME:
+        wl->colorManagerSupport.setExtendedTargetVolume = GLFW_TRUE;
+        break;
+    case WP_COLOR_MANAGER_V1_FEATURE_WINDOWS_SCRGB:
+        wl->colorManagerSupport.windowsScrgb = GLFW_TRUE;
+        break;
+    default:
+        printf("Wayland: Unsupported color manager feature %d\n", feature);
+        break;
+    }
+}
+
+void colorManagerHandleSupportedTransferFunction(void *userData, struct wp_color_manager_v1 *color_manager, uint32_t tf)
+{
+    _GLFWlibraryWayland* wl = userData;
+    if (tf >= sizeof(wl->colorManagerSupport.tfs) / sizeof(wl->colorManagerSupport.tfs[0]))
+    {
+        printf("Wayland: Unsupported transfer function %d\n", tf);
+        return;
+    }
+
+    wl->colorManagerSupport.tfs[tf] = GLFW_TRUE;
+}
+
+void colorManagerHandleSupportedPrimaries(void *userData, struct wp_color_manager_v1 *color_manager, uint32_t primaries)
+{
+    _GLFWlibraryWayland* wl = userData;
+    if (primaries >= sizeof(wl->colorManagerSupport.primaries) / sizeof(wl->colorManagerSupport.primaries[0]))
+    {
+        printf("Wayland: Unsupported primaries %d\n", primaries);
+        return;
+    }
+
+    wl->colorManagerSupport.primaries[primaries] = GLFW_TRUE;
+}
+
+void colorManagerHandleDone(void *userData, struct wp_color_manager_v1 *color_manager)
+{
+}
+
+const struct wp_color_manager_v1_listener colorManagerListener = {
+    colorManagerHandleSupportedIntent,
+    colorManagerHandleSupportedFeature,
+    colorManagerHandleSupportedTransferFunction,
+    colorManagerHandleSupportedPrimaries,
+    colorManagerHandleDone,
 };
 
 static void registryHandleGlobal(void* userData,
@@ -239,6 +327,19 @@ static void registryHandleGlobal(void* userData,
             wl_registry_bind(registry, name,
                              &zwp_text_input_manager_v3_interface,
                              1);
+    }
+    else if (strcmp(interface, "wp_color_manager_v1") == 0)
+    {
+        if (_glfw.hints.init.wl.colorManagement == GLFW_TRUE)
+        {
+            _glfw.wl.colorManager =
+                wl_registry_bind(registry, name,
+                                 &wp_color_manager_v1_interface,
+                                 1);
+
+            memset(&_glfw.wl.colorManagerSupport, 0, sizeof(_glfw.wl.colorManagerSupport));
+            wp_color_manager_v1_add_listener(_glfw.wl.colorManager, &colorManagerListener, &_glfw.wl);
+        }
     }
 }
 
@@ -522,6 +623,11 @@ GLFWbool _glfwConnectWayland(int platformID, _GLFWplatform* platform)
         .getFramebufferSize = _glfwGetFramebufferSizeWayland,
         .getWindowFrameSize = _glfwGetWindowFrameSizeWayland,
         .getWindowContentScale = _glfwGetWindowContentScaleWayland,
+        .getWindowSdrWhiteLevel = _glfwGetWindowSdrWhiteLevelWayland,
+        .getWindowMinLuminance = _glfwGetWindowMinLuminanceWayland,
+        .getWindowMaxLuminance = _glfwGetWindowMaxLuminanceWayland,
+        .getWindowPrimaries = _glfwGetWindowPrimariesWayland,
+        .getWindowTransfer = _glfwGetWindowTransferWayland,
         .iconifyWindow = _glfwIconifyWindowWayland,
         .restoreWindow = _glfwRestoreWindowWayland,
         .maximizeWindow = _glfwMaximizeWindowWayland,
@@ -530,6 +636,7 @@ GLFWbool _glfwConnectWayland(int platformID, _GLFWplatform* platform)
         .requestWindowAttention = _glfwRequestWindowAttentionWayland,
         .focusWindow = _glfwFocusWindowWayland,
         .setWindowMonitor = _glfwSetWindowMonitorWayland,
+        .getWindowCurrentMonitor = _glfwGetWindowCurrentMonitorWayland,
         .windowFocused = _glfwWindowFocusedWayland,
         .windowIconified = _glfwWindowIconifiedWayland,
         .windowVisible = _glfwWindowVisibleWayland,
@@ -953,6 +1060,18 @@ void _glfwTerminateWayland(void)
         libdecor_unref(_glfw.wl.libdecor.context);
     }
 
+    if (_glfw.wl.libdecor.handle)
+    {
+        _glfwPlatformFreeModule(_glfw.wl.libdecor.handle);
+        _glfw.wl.libdecor.handle = NULL;
+    }
+
+    if (_glfw.wl.egl.handle)
+    {
+        _glfwPlatformFreeModule(_glfw.wl.egl.handle);
+        _glfw.wl.egl.handle = NULL;
+    }
+
     if (_glfw.wl.xkb.composeState)
         xkb_compose_state_unref(_glfw.wl.xkb.composeState);
     if (_glfw.wl.xkb.keymap)
@@ -961,11 +1080,21 @@ void _glfwTerminateWayland(void)
         xkb_state_unref(_glfw.wl.xkb.state);
     if (_glfw.wl.xkb.context)
         xkb_context_unref(_glfw.wl.xkb.context);
+    if (_glfw.wl.xkb.handle)
+    {
+        _glfwPlatformFreeModule(_glfw.wl.xkb.handle);
+        _glfw.wl.xkb.handle = NULL;
+    }
 
     if (_glfw.wl.cursorTheme)
         wl_cursor_theme_destroy(_glfw.wl.cursorTheme);
     if (_glfw.wl.cursorThemeHiDPI)
         wl_cursor_theme_destroy(_glfw.wl.cursorThemeHiDPI);
+    if (_glfw.wl.cursor.handle)
+    {
+        _glfwPlatformFreeModule(_glfw.wl.cursor.handle);
+        _glfw.wl.cursor.handle = NULL;
+    }
 
     for (unsigned int i = 0; i < _glfw.wl.offerCount; i++)
         wl_data_offer_destroy(_glfw.wl.offers[i].offer);
@@ -1016,6 +1145,8 @@ void _glfwTerminateWayland(void)
         zwp_text_input_manager_v1_destroy(_glfw.wl.textInputManagerV1);
     if (_glfw.wl.textInputManagerV3)
         zwp_text_input_manager_v3_destroy(_glfw.wl.textInputManagerV3);
+    if (_glfw.wl.colorManager)
+        wp_color_manager_v1_destroy(_glfw.wl.colorManager);
     if (_glfw.wl.registry)
         wl_registry_destroy(_glfw.wl.registry);
     if (_glfw.wl.display)

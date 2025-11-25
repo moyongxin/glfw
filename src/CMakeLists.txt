@@ -96,20 +96,19 @@ if (GLFW_BUILD_WAYLAND)
         target_sources(glfw PRIVATE ${header_file} ${code_file})
     endmacro()
 
-    #if (CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
-        generate_wayland_protocol("wayland.xml")
-        generate_wayland_protocol("viewporter.xml")
-        generate_wayland_protocol("xdg-shell.xml")
-        generate_wayland_protocol("idle-inhibit-unstable-v1.xml")
-        generate_wayland_protocol("pointer-warp-v1.xml")
-        generate_wayland_protocol("pointer-constraints-unstable-v1.xml")
-        generate_wayland_protocol("relative-pointer-unstable-v1.xml")
-        generate_wayland_protocol("fractional-scale-v1.xml")
-        generate_wayland_protocol("xdg-activation-v1.xml")
-        generate_wayland_protocol("xdg-decoration-unstable-v1.xml")
-        generate_wayland_protocol("text-input-unstable-v1.xml")
-        generate_wayland_protocol("text-input-unstable-v3.xml")
-    #endif()
+    generate_wayland_protocol("wayland.xml")
+    generate_wayland_protocol("viewporter.xml")
+    generate_wayland_protocol("xdg-shell.xml")
+    generate_wayland_protocol("idle-inhibit-unstable-v1.xml")
+    generate_wayland_protocol("pointer-constraints-unstable-v1.xml")
+    generate_wayland_protocol("relative-pointer-unstable-v1.xml")
+    generate_wayland_protocol("fractional-scale-v1.xml")
+    generate_wayland_protocol("color-management-v1.xml")
+    generate_wayland_protocol("xdg-activation-v1.xml")
+    generate_wayland_protocol("xdg-decoration-unstable-v1.xml")
+    generate_wayland_protocol("text-input-unstable-v1.xml")
+    generate_wayland_protocol("text-input-unstable-v3.xml")
+    generate_wayland_protocol("pointer-warp-v1.xml")
 endif()
 
 if (WIN32 AND GLFW_BUILD_SHARED_LIBRARY)
@@ -125,15 +124,22 @@ else()
 endif()
 set(GLFW_LIB_NAME_SUFFIX "")
 
-set_target_properties(glfw PROPERTIES
-                      OUTPUT_NAME ${GLFW_LIB_NAME}
-                      VERSION ${GLFW_VERSION_MAJOR}.${GLFW_VERSION_MINOR}
-                      SOVERSION ${GLFW_VERSION_MAJOR}
-                      POSITION_INDEPENDENT_CODE ON
-                      C_STANDARD 99
-                      C_EXTENSIONS OFF
-                      DEFINE_SYMBOL _GLFW_BUILD_DLL
-                      FOLDER "GLFW3")
+if (GLFW_BUILD_SHARED_LIBRARY)
+    set_target_properties(glfw PROPERTIES
+                          OUTPUT_NAME ${GLFW_LIB_NAME}
+                          VERSION ${GLFW_VERSION_MAJOR}.${GLFW_VERSION_MINOR}
+                          SOVERSION ${GLFW_VERSION_MAJOR}
+                          POSITION_INDEPENDENT_CODE ON
+                          C_STANDARD 99
+                          C_EXTENSIONS OFF
+                          FOLDER "GLFW3")
+
+    if (GLFW_LIBRARY_TYPE STREQUAL "OBJECT")
+        target_compile_definitions(glfw PUBLIC _GLFW_BUILD_DLL)
+    else()
+        target_compile_definitions(glfw PRIVATE _GLFW_BUILD_DLL)
+    endif()
+endif()
 
 target_include_directories(glfw PUBLIC
                            "$<BUILD_INTERFACE:${GLFW_SOURCE_DIR}/include>"
@@ -165,6 +171,10 @@ if (GLFW_BUILD_WAYLAND)
         wayland-cursor>=0.2.7
         wayland-egl>=0.2.7
         xkbcommon>=0.5.0)
+
+    pkg_check_modules(DBUS REQUIRED dbus-1)
+    target_include_directories(glfw PRIVATE ${DBUS_INCLUDE_DIRS})
+    target_link_libraries(glfw PRIVATE ${DBUS_LIBRARIES})
 
     target_include_directories(glfw PRIVATE ${Wayland_INCLUDE_DIRS})
 

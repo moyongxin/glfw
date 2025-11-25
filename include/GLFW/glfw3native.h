@@ -281,6 +281,8 @@ GLFWAPI HGLRC glfwGetWGLContext(GLFWwindow* window);
 #endif
 
 #if defined(GLFW_EXPOSE_NATIVE_COCOA)
+typedef void (*GLFWopenedFilenamesFun)(const char*);
+
 /*! @brief Returns the `CGDirectDisplayID` of the specified monitor.
  *
  *  @return The `CGDirectDisplayID` of the specified monitor, or
@@ -331,6 +333,21 @@ GLFWAPI id glfwGetCocoaWindow(GLFWwindow* window);
  *  @ingroup native
  */
 GLFWAPI id glfwGetCocoaView(GLFWwindow* window);
+
+/*! @brief Returns the list of filenames that opened the application,
+*  such as by dragging files to the app bundle or through file associations.
+*
+*  @return A list of strings, null terminated.
+*
+*  @thread_safety This function may be called from any thread.  Access is not
+*  synchronized.
+*
+*  @since Added in version 3.4.
+*
+*  @ingroup native
+*/
+const char* const* glfwGetOpenedFilenames(void);
+void glfwSetOpenedFilenamesCallback(GLFWopenedFilenamesFun callback);
 #endif
 
 #if defined(GLFW_EXPOSE_NATIVE_NSGL)
@@ -582,6 +599,10 @@ GLFWAPI struct wl_output* glfwGetWaylandMonitor(GLFWmonitor* monitor);
  *  @ingroup native
  */
 GLFWAPI struct wl_surface* glfwGetWaylandWindow(GLFWwindow* window);
+
+GLFWAPI void glfwSetWaylandClipboardData(const char* data, const char* type, size_t length);
+
+GLFWAPI const char* glfwGetWaylandClipboardData(const char* type, size_t* length);
 #endif
 
 #if defined(GLFW_EXPOSE_NATIVE_EGL)

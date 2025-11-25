@@ -391,6 +391,7 @@ struct _GLFWinitconfig
     } x11;
     struct {
         int       libdecorMode;
+        GLFWbool  colorManagement;
     } wl;
 };
 
@@ -406,6 +407,7 @@ struct _GLFWwndconfig
     int           ypos;
     int           width;
     int           height;
+    const char*   title;
     GLFWbool      resizable;
     GLFWbool      visible;
     GLFWbool      decorated;
@@ -484,6 +486,7 @@ struct _GLFWfbconfig
     int         samples;
     GLFWbool    sRGB;
     GLFWbool    doublebuffer;
+    GLFWbool    floatbuffer;
     GLFWbool    transparent;
     uintptr_t   handle;
 };
@@ -583,6 +586,7 @@ struct _GLFWwindow
     _GLFWcursor*        cursor;
     char*               title;
 
+    int                 bitsPerSample;
     int                 minwidth, minheight;
     int                 maxwidth, maxheight;
     int                 numer, denom;
@@ -766,6 +770,11 @@ struct _GLFWplatform
     void (*setWindowIcon)(_GLFWwindow*,int,const GLFWimage*);
     void (*getWindowPos)(_GLFWwindow*,int*,int*);
     void (*setWindowPos)(_GLFWwindow*,int,int);
+    float (*getWindowSdrWhiteLevel)(_GLFWwindow*);
+    float (*getWindowMinLuminance)(_GLFWwindow*);
+    float (*getWindowMaxLuminance)(_GLFWwindow*);
+    uint32_t (*getWindowPrimaries)(_GLFWwindow*);
+    uint32_t (*getWindowTransfer)(_GLFWwindow*);
     void (*getWindowSize)(_GLFWwindow*,int*,int*);
     void (*setWindowSize)(_GLFWwindow*,int,int);
     void (*setWindowSizeLimits)(_GLFWwindow*,int,int,int,int);
@@ -781,6 +790,7 @@ struct _GLFWplatform
     void (*requestWindowAttention)(_GLFWwindow*);
     void (*focusWindow)(_GLFWwindow*);
     void (*setWindowMonitor)(_GLFWwindow*,_GLFWmonitor*,int,int,int,int,int);
+    GLFWmonitor* (*getWindowCurrentMonitor)(_GLFWwindow*);
     GLFWbool (*windowFocused)(_GLFWwindow*);
     GLFWbool (*windowIconified)(_GLFWwindow*);
     GLFWbool (*windowVisible)(_GLFWwindow*);

@@ -176,6 +176,8 @@ typedef struct _GLFWwindowNS
     double          cursorWarpDeltaX, cursorWarpDeltaY;
 } _GLFWwindowNS;
 
+typedef void (*_GLFWopenedFilenamesFun)(const char*);
+
 // Cocoa-specific global data
 //
 typedef struct _GLFWlibraryNS
@@ -199,6 +201,9 @@ typedef struct _GLFWlibraryNS
     double              restoreCursorPosX, restoreCursorPosY;
     // The window whose disabled cursor mode is active
     _GLFWwindow*        disabledCursorWindow;
+
+    char**              openedFilenames;
+    _GLFWopenedFilenamesFun openedFilenamesCallback;
 
     struct {
         CFBundleRef     bundle;
@@ -257,6 +262,11 @@ void _glfwSetWindowAspectRatioCocoa(_GLFWwindow* window, int numer, int denom);
 void _glfwGetFramebufferSizeCocoa(_GLFWwindow* window, int* width, int* height);
 void _glfwGetWindowFrameSizeCocoa(_GLFWwindow* window, int* left, int* top, int* right, int* bottom);
 void _glfwGetWindowContentScaleCocoa(_GLFWwindow* window, float* xscale, float* yscale);
+float _glfwGetWindowSdrWhiteLevelCocoa(_GLFWwindow* window);
+float _glfwGetWindowMinLuminanceCocoa(_GLFWwindow* window);
+float _glfwGetWindowMaxLuminanceCocoa(_GLFWwindow* window);
+uint32_t _glfwGetWindowPrimariesCocoa(_GLFWwindow* window);
+uint32_t _glfwGetWindowTransferCocoa(_GLFWwindow* window);
 void _glfwIconifyWindowCocoa(_GLFWwindow* window);
 void _glfwRestoreWindowCocoa(_GLFWwindow* window);
 void _glfwMaximizeWindowCocoa(_GLFWwindow* window);
@@ -265,6 +275,7 @@ void _glfwHideWindowCocoa(_GLFWwindow* window);
 void _glfwRequestWindowAttentionCocoa(_GLFWwindow* window);
 void _glfwFocusWindowCocoa(_GLFWwindow* window);
 void _glfwSetWindowMonitorCocoa(_GLFWwindow* window, _GLFWmonitor* monitor, int xpos, int ypos, int width, int height, int refreshRate);
+GLFWmonitor* _glfwGetWindowCurrentMonitorCocoa(_GLFWwindow* window);
 GLFWbool _glfwWindowFocusedCocoa(_GLFWwindow* window);
 GLFWbool _glfwWindowIconifiedCocoa(_GLFWwindow* window);
 GLFWbool _glfwWindowVisibleCocoa(_GLFWwindow* window);

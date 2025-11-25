@@ -152,7 +152,6 @@ struct wl_cursor
     struct wl_cursor_image** images;
     char* name;
 };
-
 typedef struct wl_cursor_theme* (* PFN_wl_cursor_theme_load)(const char*, int, struct wl_shm*);
 typedef void (* PFN_wl_cursor_theme_destroy)(struct wl_cursor_theme*);
 typedef struct wl_cursor* (* PFN_wl_cursor_theme_get_cursor)(struct wl_cursor_theme*, const char*);
@@ -343,6 +342,7 @@ typedef struct _GLFWofferWayland
     struct wl_data_offer*       offer;
     GLFWbool                    text_plain_utf8;
     GLFWbool                    text_uri_list;
+    GLFWbool                    portal_file_transfer;
 } _GLFWofferWayland;
 
 typedef struct _GLFWscaleWayland
@@ -361,8 +361,12 @@ typedef struct _GLFWwindowWayland
     GLFWbool                    maximized;
     GLFWbool                    activated;
     GLFWbool                    fullscreen;
+    GLFWbool                    hovered;
     GLFWbool                    transparent;
     GLFWbool                    scaleFramebuffer;
+    float                       sdrWhiteLevel;
+    float                       minLuminance;
+    float                       maxLuminance;
     struct wl_surface*          surface;
     struct wl_callback*         callback;
 
@@ -389,6 +393,7 @@ typedef struct _GLFWwindowWayland
         struct libdecor_frame*  frame;
     } libdecor;
 
+    _GLFWcursor*                currentCursor;
     double                      cursorPosX, cursorPosY;
 
     char*                       appId;
@@ -403,6 +408,8 @@ typedef struct _GLFWwindowWayland
     struct wp_viewport*             scalingViewport;
     uint32_t                        scalingNumerator;
     struct wp_fractional_scale_v1*  fractionalScale;
+    struct wp_color_management_surface_v1*  colorSurface;
+    struct wp_color_management_surface_feedback_v1*  colorSurfaceFeedback;
 
     struct zwp_relative_pointer_v1* relativePointer;
     struct zwp_locked_pointer_v1*   lockedPointer;
@@ -452,6 +459,22 @@ typedef struct _GLFWlibraryWayland
     struct wp_pointer_warp_v1*  pointerWarp;
     struct zwp_text_input_manager_v1*       textInputManagerV1;
     struct zwp_text_input_manager_v3*       textInputManagerV3;
+    struct wp_color_manager_v1*             colorManager;
+
+    struct {
+        GLFWbool parametric;
+        GLFWbool icc;
+        GLFWbool setPrimaries;
+        GLFWbool setTfPower;
+        GLFWbool setLuminance;
+        GLFWbool setMasteringDisplayPrimaries;
+        GLFWbool setExtendedTargetVolume;
+        GLFWbool windowsScrgb;
+
+        GLFWbool primaries[11];
+        GLFWbool tfs[14];
+        GLFWbool intents[5];
+    } colorManagerSupport;
 
     _GLFWofferWayland*          offers;
     unsigned int                offerCount;
@@ -466,9 +489,12 @@ typedef struct _GLFWlibraryWayland
     const char*                 tag;
 
     struct wl_surface*          pointerSurface;
+    GLFWbool                    dragUsePortal;
+
     struct wl_cursor_theme*     cursorTheme;
     struct wl_cursor_theme*     cursorThemeHiDPI;
     struct wl_surface*          cursorSurface;
+    const char*                 cursorPreviousName;
     int                         cursorTimerfd;
     uint32_t                    serial;
     uint32_t                    pointerEnterSerial;
@@ -479,6 +505,8 @@ typedef struct _GLFWlibraryWayland
     int                         keyRepeatScancode;
 
     char*                       clipboardString;
+    size_t                      clipboardLength;
+
     short int                   keycodes[256];
     short int                   scancodes[GLFW_KEY_LAST + 1];
     char                        keynames[GLFW_KEY_LAST + 1][5];
@@ -652,6 +680,12 @@ void _glfwSetWindowAspectRatioWayland(_GLFWwindow* window, int numer, int denom)
 void _glfwGetFramebufferSizeWayland(_GLFWwindow* window, int* width, int* height);
 void _glfwGetWindowFrameSizeWayland(_GLFWwindow* window, int* left, int* top, int* right, int* bottom);
 void _glfwGetWindowContentScaleWayland(_GLFWwindow* window, float* xscale, float* yscale);
+float _glfwGetWindowSdrWhiteLevelWayland(_GLFWwindow* window);
+float _glfwGetWindowMinLuminanceWayland(_GLFWwindow* window);
+float _glfwGetWindowMaxLuminanceWayland(_GLFWwindow* window);
+uint32_t _glfwGetWindowPrimariesWayland(_GLFWwindow* window);
+uint32_t _glfwGetWindowTransferWayland(_GLFWwindow* window);
+uint32_t _glfwGetWindowRenderingIntentWayland(_GLFWwindow* window);
 void _glfwIconifyWindowWayland(_GLFWwindow* window);
 void _glfwRestoreWindowWayland(_GLFWwindow* window);
 void _glfwMaximizeWindowWayland(_GLFWwindow* window);
@@ -660,6 +694,7 @@ void _glfwHideWindowWayland(_GLFWwindow* window);
 void _glfwRequestWindowAttentionWayland(_GLFWwindow* window);
 void _glfwFocusWindowWayland(_GLFWwindow* window);
 void _glfwSetWindowMonitorWayland(_GLFWwindow* window, _GLFWmonitor* monitor, int xpos, int ypos, int width, int height, int refreshRate);
+GLFWmonitor* _glfwGetWindowCurrentMonitorWayland(_GLFWwindow* window);
 GLFWbool _glfwWindowFocusedWayland(_GLFWwindow* window);
 GLFWbool _glfwWindowIconifiedWayland(_GLFWwindow* window);
 GLFWbool _glfwWindowVisibleWayland(_GLFWwindow* window);

@@ -280,6 +280,8 @@ GLFWbool _glfwCreateContextOSMesa(_GLFWwindow* window,
         return GLFW_FALSE;
     }
 
+    window->bitsPerSample = 8;
+
     window->context.makeCurrent = makeContextCurrentOSMesa;
     window->context.swapBuffers = swapBuffersOSMesa;
     window->context.swapInterval = swapIntervalOSMesa;

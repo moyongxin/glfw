@@ -196,6 +196,20 @@ static GLFWbool chooseEGLConfig(const _GLFWctxconfig* ctxconfig,
 
         u->samples = getEGLConfigAttrib(n, EGL_SAMPLES);
         u->doublebuffer = fbconfig->doublebuffer;
+        u->floatbuffer = (u->redBits == 0 || u->redBits >= 16) &&
+                        (u->greenBits == 0 || u->greenBits >= 16) &&
+                        (u->blueBits == 0 || u->blueBits >= 16) &&
+                        (u->alphaBits == 0 || u->alphaBits >= 16);
+
+        // printf("Found EGLConfig %d: %d bits red, %d bits green, %d bits blue, "
+        //        "%d bits alpha, %d bits depth, %d bits stencil, %d samples, "
+        //        "%s double buffered, %s float buffer\n",
+        //        usableCount + 1,
+        //        u->redBits, u->greenBits, u->blueBits,
+        //        u->alphaBits, u->depthBits, u->stencilBits,
+        //        u->samples,
+        //        u->doublebuffer ? "is" : "is not",
+        //        u->floatbuffer ? "is" : "is not");
 
         u->handle = (uintptr_t) n;
         usableCount++;
@@ -229,8 +243,9 @@ static GLFWbool chooseEGLConfig(const _GLFWctxconfig* ctxconfig,
         }
         else
         {
-            _glfwInputError(GLFW_FORMAT_UNAVAILABLE,
-                            "EGL: Failed to find a suitable EGLConfig");
+            // No need for this error message -- the user can simply try again.
+            // _glfwInputError(GLFW_FORMAT_UNAVAILABLE,
+            //                 "EGL: Failed to find a suitable EGLConfig");
         }
     }
 
@@ -595,6 +610,8 @@ GLFWbool _glfwCreateContextEGL(_GLFWwindow* window,
 
     if (!chooseEGLConfig(ctxconfig, fbconfig, &config))
         return GLFW_FALSE;
+
+    window->bitsPerSample = getEGLConfigAttrib(config, EGL_RED_SIZE);
 
     if (ctxconfig->client == GLFW_OPENGL_ES_API)
     {

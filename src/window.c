@@ -294,6 +294,7 @@ void glfwDefaultWindowHints(void)
     _glfw.hints.framebuffer.depthBits    = 24;
     _glfw.hints.framebuffer.stencilBits  = 8;
     _glfw.hints.framebuffer.doublebuffer = GLFW_TRUE;
+    _glfw.hints.framebuffer.floatbuffer  = GLFW_FALSE;
 
     // The default is to select the highest available refresh rate
     _glfw.hints.refreshRate = GLFW_DONT_CARE;
@@ -343,6 +344,9 @@ GLFWAPI void glfwWindowHint(int hint, int value)
             return;
         case GLFW_DOUBLEBUFFER:
             _glfw.hints.framebuffer.doublebuffer = value ? GLFW_TRUE : GLFW_FALSE;
+            return;
+        case GLFW_FLOATBUFFER:
+            _glfw.hints.framebuffer.floatbuffer = value ? GLFW_TRUE : GLFW_FALSE;
             return;
         case GLFW_TRANSPARENT_FRAMEBUFFER:
             _glfw.hints.framebuffer.transparent = value ? GLFW_TRUE : GLFW_FALSE;
@@ -621,6 +625,57 @@ GLFWAPI void glfwSetWindowPos(GLFWwindow* handle, int xpos, int ypos)
 
     _glfw.platform.setWindowPos(window, xpos, ypos);
 }
+
+GLFWAPI float glfwGetWindowSdrWhiteLevel(GLFWwindow* handle)
+{
+    _GLFW_REQUIRE_INIT_OR_RETURN(0.f);
+
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    assert(window != NULL);
+
+    return _glfw.platform.getWindowSdrWhiteLevel(window);
+}
+
+GLFWAPI float glfwGetWindowMinLuminance(GLFWwindow* handle)
+{
+    _GLFW_REQUIRE_INIT_OR_RETURN(0.f);
+
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    assert(window != NULL);
+
+    return _glfw.platform.getWindowMinLuminance(window);
+}
+
+GLFWAPI float glfwGetWindowMaxLuminance(GLFWwindow* handle)
+{
+    _GLFW_REQUIRE_INIT_OR_RETURN(0.f);
+
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    assert(window != NULL);
+
+    return _glfw.platform.getWindowMaxLuminance(window);
+}
+
+GLFWAPI uint32_t glfwGetWindowPrimaries(GLFWwindow* handle)
+{
+    _GLFW_REQUIRE_INIT_OR_RETURN(1); // sRGB
+
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    assert(window != NULL);
+
+    return _glfw.platform.getWindowPrimaries(window);
+}
+
+GLFWAPI uint32_t glfwGetWindowTransfer(GLFWwindow* handle)
+{
+    _GLFW_REQUIRE_INIT_OR_RETURN(10); // EXT sRGB
+
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    assert(window != NULL);
+
+    return _glfw.platform.getWindowTransfer(window);
+}
+
 
 GLFWAPI void glfwGetWindowSize(GLFWwindow* handle, int* width, int* height)
 {
@@ -917,6 +972,8 @@ GLFWAPI int glfwGetWindowAttrib(GLFWwindow* handle, int attrib)
             return window->mousePassthrough;
         case GLFW_TRANSPARENT_FRAMEBUFFER:
             return _glfw.platform.framebufferTransparent(window);
+        case GLFW_RED_BITS:
+            return window->bitsPerSample;
         case GLFW_RESIZABLE:
             return window->resizable;
         case GLFW_DECORATED:
@@ -1009,6 +1066,16 @@ GLFWAPI GLFWmonitor* glfwGetWindowMonitor(GLFWwindow* handle)
     assert(window != NULL);
 
     return (GLFWmonitor*) window->monitor;
+}
+
+GLFWAPI GLFWmonitor* glfwGetWindowCurrentMonitor(GLFWwindow* handle)
+{
+    _GLFW_REQUIRE_INIT_OR_RETURN(NULL);
+
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    assert(window != NULL);
+
+    return _glfw.platform.getWindowCurrentMonitor(window);
 }
 
 GLFWAPI void glfwSetWindowMonitor(GLFWwindow* wh,

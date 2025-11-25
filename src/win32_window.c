@@ -2069,6 +2069,129 @@ void _glfwSetWindowPosWin32(_GLFWwindow* window, int xpos, int ypos)
                  SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSIZE);
 }
 
+float _glfwGetWindowSdrWhiteLevelWin32(_GLFWwindow* window) {
+    if (window->bitsPerSample != 16) {
+        // If we don't have a fp16 frame buffer, Windows does not expect scRGB
+        // with proper SDR white level scaling, it instead expects standard
+        // sRGB whose reference white level should be 80 nits. (Even though the
+        // screen's reference white level -- obtained by the bottom code --
+        // might be different. In that case Windows does the remapping for us.)
+        return 80.0f;
+    }
+
+    UINT32 numPaths, numModes;
+    LONG result;
+
+    const TCHAR* monitorName = NULL;
+
+    HMONITOR hMonitor = MonitorFromWindow(window->win32.handle, MONITOR_DEFAULTTONEAREST);
+    MONITORINFOEX monitorInfo;
+    monitorInfo.cbSize = sizeof(MONITORINFOEX);
+    if (GetMonitorInfo(hMonitor, (LPMONITORINFO)&monitorInfo)) {
+        monitorName = monitorInfo.szDevice;
+    }
+
+    // Get the number of paths and modes
+    result = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &numPaths, &numModes);
+    if (result != ERROR_SUCCESS) {
+        return 80.0f;
+    }
+
+    // Allocate memory for the paths and modes
+    DISPLAYCONFIG_PATH_INFO* paths = _glfw_calloc(numPaths, sizeof(DISPLAYCONFIG_PATH_INFO));
+    DISPLAYCONFIG_MODE_INFO* modes = _glfw_calloc(numModes, sizeof(DISPLAYCONFIG_MODE_INFO));
+
+    if (!paths || !modes) {
+        _glfw_free(paths);
+        _glfw_free(modes);
+        return 80.0f;
+    }
+
+    // Query the display configuration
+    result = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &numPaths, paths, &numModes, modes, NULL);
+    if (result != ERROR_SUCCESS) {
+        _glfw_free(paths);
+        _glfw_free(modes);
+        return 80.0f;
+    }
+
+    for (UINT32 i = 0; i < numPaths; i++) {
+        if (!(paths[i].flags & DISPLAYCONFIG_PATH_ACTIVE)) {
+            continue;
+        }
+
+        DISPLAYCONFIG_SOURCE_DEVICE_NAME sourceName;
+        memset(&sourceName, 0, sizeof(sourceName));
+        sourceName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+        sourceName.header.size = sizeof(DISPLAYCONFIG_SOURCE_DEVICE_NAME);
+        sourceName.header.adapterId = paths[i].sourceInfo.adapterId;
+        sourceName.header.id = paths[i].sourceInfo.id;
+
+        result = DisplayConfigGetDeviceInfo(&sourceName.header);
+
+        // If we have a monitor name, only check for sdr white level on the monitor that it matches
+        if (result != ERROR_SUCCESS || (monitorName && wcscmp(sourceName.viewGdiDeviceName, monitorName) != 0)) {
+            continue;
+        }
+
+        DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO advancedColorInfo;
+        memset(&advancedColorInfo, 0, sizeof(advancedColorInfo));
+        advancedColorInfo.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+        advancedColorInfo.header.size = sizeof(advancedColorInfo);
+        advancedColorInfo.header.adapterId = paths[i].targetInfo.adapterId;
+        advancedColorInfo.header.id = paths[i].targetInfo.id;
+        result = DisplayConfigGetDeviceInfo(&advancedColorInfo.header);
+
+        if (result != ERROR_SUCCESS) {
+            continue;
+        }
+
+        if (advancedColorInfo.advancedColorEnabled == 0) {
+            _glfw_free(paths);
+            _glfw_free(modes);
+            return 80.0f;
+        }
+
+        DISPLAYCONFIG_SDR_WHITE_LEVEL whiteLevel;
+        memset(&whiteLevel, 0, sizeof(whiteLevel));
+        whiteLevel.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+        whiteLevel.header.size = sizeof(whiteLevel);
+        whiteLevel.header.adapterId = paths[i].targetInfo.adapterId;
+        whiteLevel.header.id = paths[i].targetInfo.id;
+        if (DisplayConfigGetDeviceInfo(&whiteLevel.header) != ERROR_SUCCESS) {
+            continue;
+        }
+
+        _glfw_free(paths);
+        _glfw_free(modes);
+        return whiteLevel.SDRWhiteLevel / 1000.0f * 80.0f;
+    }
+
+    _glfw_free(paths);
+    _glfw_free(modes);
+    return 80.0f; // sRGB standard white level
+}
+
+float _glfwGetWindowMinLuminanceWin32(_GLFWwindow* window) {
+    return 0.0f;
+}
+
+float _glfwGetWindowMaxLuminanceWin32(_GLFWwindow* window) {
+    return 0.0f;
+}
+
+uint32_t _glfwGetWindowPrimariesWin32(_GLFWwindow* window)
+{
+    return 1; // sRGB
+}
+
+uint32_t _glfwGetWindowTransferWin32(_GLFWwindow* window)
+{
+    // If we managed to get a fp16 frame buffer on Windows, we need to output scRGB
+    // i.e. linear colors w/ sRGB primaries.
+    return window->bitsPerSample == 16 ? 5 : 10; // 5 == linear, 10 == EXT sRGB
+}
+
 void _glfwGetWindowSizeWin32(_GLFWwindow* window, int* width, int* height)
 {
     RECT area;
@@ -2361,6 +2484,23 @@ void _glfwSetWindowMonitorWin32(_GLFWwindow* window,
                      rect.right - rect.left, rect.bottom - rect.top,
                      flags);
     }
+}
+
+GLFWmonitor* _glfwGetWindowCurrentMonitorWin32(_GLFWwindow* window)
+{
+    HMONITOR hMonitor = MonitorFromWindow(window->win32.handle, MONITOR_DEFAULTTONEAREST);
+
+    int monitorCount;
+    GLFWmonitor **monitors = glfwGetMonitors(&monitorCount);
+
+    for (int i = 0;  i < monitorCount;  i++)
+    {
+        _GLFWmonitor* monitor = (_GLFWmonitor*) monitors[i];
+        if (monitor->win32.handle == hMonitor)
+            return monitors[i];
+    }
+
+    return NULL;
 }
 
 GLFWbool _glfwWindowFocusedWin32(_GLFWwindow* window)

@@ -221,6 +221,11 @@ void _glfwSetWindowMonitorNull(_GLFWwindow* window,
     }
 }
 
+GLFWmonitor* _glfwGetWindowCurrentMonitorNull(_GLFWwindow* window)
+{
+    return NULL;
+}
+
 void _glfwGetWindowPosNull(_GLFWwindow* window, int* xpos, int* ypos)
 {
     if (xpos)
@@ -240,6 +245,31 @@ void _glfwSetWindowPosNull(_GLFWwindow* window, int xpos, int ypos)
         window->null.ypos = ypos;
         _glfwInputWindowPos(window, xpos, ypos);
     }
+}
+
+float _glfwGetWindowSdrWhiteLevelNull(_GLFWwindow* window)
+{
+    return 80.0f;
+}
+
+float _glfwGetWindowMinLuminanceNull(_GLFWwindow* window)
+{
+    return 0.0f;
+}
+
+float _glfwGetWindowMaxLuminanceNull(_GLFWwindow* window)
+{
+    return 0.0f;
+}
+
+uint32_t _glfwGetWindowPrimariesNull(_GLFWwindow* window)
+{
+    return 1; // sRGB
+}
+
+uint32_t _glfwGetWindowTransferNull(_GLFWwindow* window)
+{
+    return 10; // EXT sRGB
 }
 
 void _glfwGetWindowSizeNull(_GLFWwindow* window, int* width, int* height)

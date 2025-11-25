@@ -171,6 +171,7 @@ typedef enum
 #define WGL_DRAW_TO_WINDOW_ARB 0x2001
 #define WGL_PIXEL_TYPE_ARB 0x2013
 #define WGL_TYPE_RGBA_ARB 0x202b
+#define WGL_TYPE_RGBA_FLOAT_ARB 0x21a0
 #define WGL_ACCELERATION_ARB 0x2003
 #define WGL_NO_ACCELERATION_ARB 0x2025
 #define WGL_RED_BITS_ARB 0x2015
@@ -537,6 +538,11 @@ void _glfwSetWindowAspectRatioWin32(_GLFWwindow* window, int numer, int denom);
 void _glfwGetFramebufferSizeWin32(_GLFWwindow* window, int* width, int* height);
 void _glfwGetWindowFrameSizeWin32(_GLFWwindow* window, int* left, int* top, int* right, int* bottom);
 void _glfwGetWindowContentScaleWin32(_GLFWwindow* window, float* xscale, float* yscale);
+float _glfwGetWindowSdrWhiteLevelWin32(_GLFWwindow* window);
+float _glfwGetWindowMinLuminanceWin32(_GLFWwindow* window);
+float _glfwGetWindowMaxLuminanceWin32(_GLFWwindow* window);
+uint32_t _glfwGetWindowPrimariesWin32(_GLFWwindow* window);
+uint32_t _glfwGetWindowTransferWin32(_GLFWwindow* window);
 void _glfwIconifyWindowWin32(_GLFWwindow* window);
 void _glfwRestoreWindowWin32(_GLFWwindow* window);
 void _glfwMaximizeWindowWin32(_GLFWwindow* window);
@@ -545,6 +551,7 @@ void _glfwHideWindowWin32(_GLFWwindow* window);
 void _glfwRequestWindowAttentionWin32(_GLFWwindow* window);
 void _glfwFocusWindowWin32(_GLFWwindow* window);
 void _glfwSetWindowMonitorWin32(_GLFWwindow* window, _GLFWmonitor* monitor, int xpos, int ypos, int width, int height, int refreshRate);
+GLFWmonitor* _glfwGetWindowCurrentMonitorWin32(_GLFWwindow* window);
 GLFWbool _glfwWindowFocusedWin32(_GLFWwindow* window);
 GLFWbool _glfwWindowIconifiedWin32(_GLFWwindow* window);
 GLFWbool _glfwWindowVisibleWin32(_GLFWwindow* window);

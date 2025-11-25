@@ -40,6 +40,7 @@
 #include <sys/mman.h>
 #include <sys/timerfd.h>
 #include <poll.h>
+#include <dbus/dbus.h>
 #if defined(__FreeBSD__)
     #include <linux/input-event-codes.h>
 #endif
@@ -64,6 +65,11 @@
 #define GLFW_PENDING_BUTTON  2
 #define GLFW_PENDING_MOTION  4
 #define GLFW_PENDING_SCROLL  8
+#include "color-management-v1-client-protocol.h"
+
+#define GLFW_BORDER_SIZE    4
+#define GLFW_CAPTION_HEIGHT 24
+#define FILE_TRANSFER_PORTAL_MIME_TYPE "application/vnd.portal.filetransfer"
 
 static int createTmpfileCloexec(char* tmpname)
 {
@@ -726,6 +732,192 @@ static void deactivateTextInputV1(_GLFWwindow* window)
     zwp_text_input_v1_deactivate(window->wl.textInputV1, _glfw.wl.seat);
 }
 
+#define WAYLAND_COLOR_FACTOR 1000000
+#define WAYLAND_MIN_LUMINANCE_FACTOR 10000
+
+static GLFWbool updateColorManagedSurface(_GLFWwindow* window)
+{
+    // These functions take into account the color management support of the compositor
+    enum wp_color_manager_v1_primaries primaries = _glfwGetWindowPrimariesWayland(window);
+    enum wp_color_manager_v1_transfer_function tf = _glfwGetWindowTransferWayland(window);
+    enum wp_color_manager_v1_render_intent intent = _glfwGetWindowRenderingIntentWayland(window);
+
+    struct wp_image_description_creator_params_v1* creator = wp_color_manager_v1_create_parametric_creator(_glfw.wl.colorManager);
+    if (!creator)
+    {
+        _glfwInputError(GLFW_PLATFORM_ERROR, "Wayland: Failed to create color management creator");
+        return GLFW_FALSE;
+    }
+
+    wp_image_description_creator_params_v1_set_primaries_named(creator, primaries);
+    wp_image_description_creator_params_v1_set_tf_named(creator, tf);
+
+    if (_glfw.wl.colorManagerSupport.setLuminance && (window->wl.sdrWhiteLevel != 0.0f || window->wl.minLuminance != 0.0f || window->wl.maxLuminance != 0.0f))
+    {
+        wp_image_description_creator_params_v1_set_luminances(creator,
+                                                              (uint32_t)(window->wl.minLuminance * WAYLAND_MIN_LUMINANCE_FACTOR),
+                                                              (uint32_t)window->wl.maxLuminance,
+                                                              (uint32_t)window->wl.sdrWhiteLevel);
+    }
+
+    struct wp_image_description_v1* image_description = wp_image_description_creator_params_v1_create(creator);
+
+    if (!image_description)
+    {
+        _glfwInputError(GLFW_PLATFORM_ERROR, "Wayland: Failed to create image description");
+        wp_image_description_creator_params_v1_destroy(creator);
+        return GLFW_FALSE;
+    }
+
+    wp_color_management_surface_v1_set_image_description(window->wl.colorSurface, image_description, intent);
+
+    wp_image_description_v1_destroy(image_description);
+    return GLFW_TRUE;
+}
+
+void imageDescriptionHandleDone(void *userData, struct wp_image_description_info_v1 *image_description_info)
+{
+    wp_image_description_info_v1_destroy(image_description_info);
+}
+
+// TODO: consider using the following callbacks to get information about the displayable color volume of the display such that
+// users can clip their colors to the displayable color volume. (E.g. to avoid the display itself clipping the colors or renormalizing them unintentionally)
+void imageDescriptionHandleIccFile(void *userData, struct wp_image_description_info_v1 *image_description_info, int32_t icc, uint32_t icc_size)
+{
+}
+
+void imageDescriptionHandlePrimaries(void *userData, struct wp_image_description_info_v1 *image_description_info, int32_t r_x, int32_t r_y, int32_t g_x, int32_t g_y, int32_t b_x, int32_t b_y, int32_t w_x, int32_t w_y)
+{
+}
+
+void imageDescriptionHandlePrimariesNamed(void *userData, struct wp_image_description_info_v1 *image_description_info, uint32_t primaries)
+{
+    // // Translate Wayland transfer function to H.273 code points 
+    // switch (primaries)
+    // {
+    //     case WP_COLOR_MANAGER_V1_PRIMARIES_SRGB: hdrConfig->primaries = 1; break;
+    //     case WP_COLOR_MANAGER_V1_PRIMARIES_PAL_M: hdrConfig->primaries = 4; break;
+    //     case WP_COLOR_MANAGER_V1_PRIMARIES_PAL: hdrConfig->primaries = 5; break;
+    //     case WP_COLOR_MANAGER_V1_PRIMARIES_NTSC: hdrConfig->primaries = 6; break;
+    //     case WP_COLOR_MANAGER_V1_PRIMARIES_GENERIC_FILM: hdrConfig->primaries = 8; break;
+    //     case WP_COLOR_MANAGER_V1_PRIMARIES_BT2020: hdrConfig->primaries = 9; break;
+    //     case WP_COLOR_MANAGER_V1_PRIMARIES_CIE1931_XYZ: hdrConfig->primaries = 10; break;
+    //     case WP_COLOR_MANAGER_V1_PRIMARIES_DCI_P3: hdrConfig->primaries = 11; break;
+    //     case WP_COLOR_MANAGER_V1_PRIMARIES_DISPLAY_P3: hdrConfig->primaries = 12; break;
+    //     case WP_COLOR_MANAGER_V1_PRIMARIES_ADOBE_RGB: hdrConfig->primaries = 256; break; // Adobe RGB is not defined in H.273, use 256 as a placeholder
+    //     default:
+    //         _glfwInputError(GLFW_PLATFORM_ERROR,
+    //                         "Wayland: Unknown primaries %d", primaries);
+    //         return;
+    // }
+}
+
+void imageDescriptionHandlePower(void *userData, struct wp_image_description_info_v1 *image_description_info, uint32_t eexp)
+{
+}
+
+void imageDescriptionHandleTransferFunctionNamed(void *userData, struct wp_image_description_info_v1 *image_description_info, uint32_t tf)
+{
+    // // Translate Wayland transfer function to H.273 code points 
+    // switch (tf)
+    // {
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_BT1886: hdrConfig->transfer_function = 1; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22: hdrConfig->transfer_function = 4; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA28: hdrConfig->transfer_function = 5; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST240: hdrConfig->transfer_function = 7; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_EXT_LINEAR: hdrConfig->transfer_function = 8; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_LOG_100: hdrConfig->transfer_function = 9; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_LOG_316: hdrConfig->transfer_function = 10; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_XVYCC: hdrConfig->transfer_function = 11; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB: hdrConfig->transfer_function = 13; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_EXT_SRGB: hdrConfig->transfer_function = 13; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ: hdrConfig->transfer_function = 16; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST428: hdrConfig->transfer_function = 17; break;
+    //     case WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_HLG: hdrConfig->transfer_function = 18; break;
+    //     default:
+    //         _glfwInputError(GLFW_PLATFORM_ERROR,
+    //                         "Wayland: Unknown transfer function %d", tf);
+    //         return;
+    // }
+}
+
+void imageDescriptionHandleLuminances(void *userData, struct wp_image_description_info_v1 *image_description_info, uint32_t min_lum, uint32_t max_lum, uint32_t reference_lum)
+{
+    // printf("Wayland: min_lum=%d, max_lum=%d, reference_lum=%d\n", min_lum, max_lum, reference_lum);
+    _GLFWwindow* window = userData;
+    window->wl.sdrWhiteLevel = reference_lum;
+    window->wl.minLuminance = (float)min_lum / WAYLAND_MIN_LUMINANCE_FACTOR;
+    window->wl.maxLuminance = (float)max_lum;
+
+    updateColorManagedSurface(window);
+}
+
+void imageDescriptionHandleTargetPrimaries(void *userData, struct wp_image_description_info_v1 *image_description_info, int32_t r_x, int32_t r_y, int32_t g_x, int32_t g_y, int32_t b_x, int32_t b_y, int32_t w_x, int32_t w_y)
+{
+}
+
+void imageDescriptionHandleTargetLuminances(void *userData, struct wp_image_description_info_v1 *image_description_info, uint32_t min_lum, uint32_t max_lum)
+{
+}
+
+void imageDescriptionHandleTargetMaxCll(void *userData, struct wp_image_description_info_v1 *image_description_info, uint32_t max_cll)
+{
+}
+
+void imageDescriptionHandleTargetMaxFall(void *userData, struct wp_image_description_info_v1 *image_description_info, uint32_t max_fall)
+{
+}
+
+const struct wp_image_description_info_v1_listener imageDescriptionListener = {
+    imageDescriptionHandleDone,
+    imageDescriptionHandleIccFile,
+    imageDescriptionHandlePrimaries,
+    imageDescriptionHandlePrimariesNamed,
+    imageDescriptionHandlePower,
+    imageDescriptionHandleTransferFunctionNamed,
+    imageDescriptionHandleLuminances,
+    imageDescriptionHandleTargetPrimaries,
+    imageDescriptionHandleTargetLuminances,
+    imageDescriptionHandleTargetMaxCll,
+    imageDescriptionHandleTargetMaxFall,
+};
+
+void getPreferredImageDescription(_GLFWwindow* window)
+{
+    struct wp_image_description_v1* preferred;
+    // Strangely, Hyprland does not support getting the preferred surface feedback in forced parametric mode, even
+    // if the parametric creator mode is enabled.
+    // if (_glfw.wl.colorManagerSupport.parametric)
+    //     preferred = wp_color_management_surface_feedback_v1_get_preferred_parametric(window->wl.colorSurfaceFeedback);
+    // else
+    preferred = wp_color_management_surface_feedback_v1_get_preferred(window->wl.colorSurfaceFeedback);
+
+    if (!preferred) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Wayland: Color management surface feedback received without preferred image description");
+        return;
+    }
+
+    struct wp_image_description_info_v1 *preferredInfo = wp_image_description_v1_get_information(preferred);
+    wp_image_description_v1_destroy(preferred);
+    if (!preferredInfo) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Wayland: Color management surface feedback received with preferred image description without information");
+        return;
+    }
+
+    wp_image_description_info_v1_add_listener(preferredInfo, &imageDescriptionListener, window);
+}
+
+void colorFeedbackListenerHandleFeedback(void *userData, struct wp_color_management_surface_feedback_v1* feedback, uint32_t identity) {
+    getPreferredImageDescription(userData);
+}
+
+const struct wp_color_management_surface_feedback_v1_listener colorFeedbackListener =
+{
+    colorFeedbackListenerHandleFeedback,
+};
+
 static void xdgToplevelHandleConfigure(void* userData,
                                        struct xdg_toplevel* toplevel,
                                        int32_t width,
@@ -1190,6 +1382,30 @@ static void destroyShellObjects(_GLFWwindow* window)
     window->wl.xdg.surface = NULL;
 }
 
+static GLFWbool supportsColorManagement(_GLFWwindow* window)
+{
+    if (!_glfw.wl.colorManager)
+        return GLFW_FALSE;
+
+    if (!_glfw.wl.colorManagerSupport.parametric)
+        return GLFW_FALSE;
+
+    if (!_glfw.wl.colorManagerSupport.intents[WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL])
+        return GLFW_FALSE;
+
+    if (!_glfw.wl.colorManagerSupport.primaries[WP_COLOR_MANAGER_V1_PRIMARIES_SRGB] &&
+        !_glfw.wl.colorManagerSupport.primaries[WP_COLOR_MANAGER_V1_PRIMARIES_BT2020])
+        return GLFW_FALSE;
+
+    if (!_glfw.wl.colorManagerSupport.tfs[WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB] &&
+        !_glfw.wl.colorManagerSupport.tfs[WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ] &&
+        !_glfw.wl.colorManagerSupport.tfs[WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_HLG] &&
+        !_glfw.wl.colorManagerSupport.tfs[WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_EXT_SRGB])
+        return GLFW_FALSE;
+
+    return GLFW_TRUE;
+}
+
 static GLFWbool createNativeSurface(_GLFWwindow* window,
                                     const _GLFWwndconfig* wndconfig,
                                     const _GLFWfbconfig* fbconfig)
@@ -1241,6 +1457,31 @@ static GLFWbool createNativeSurface(_GLFWwindow* window,
             wp_fractional_scale_v1_add_listener(window->wl.fractionalScale,
                                                 &fractionalScaleListener,
                                                 window);
+        }
+    }
+
+    window->wl.colorSurface = NULL;
+    window->wl.colorSurfaceFeedback = NULL;
+
+    GLFWbool supportsCm = supportsColorManagement(window);
+
+    if (supportsCm)
+    {
+        // Set up color surface & get its preferred image description (currently nothing is done with the preferred image description)
+        {
+            window->wl.colorSurface = wp_color_manager_v1_get_surface(_glfw.wl.colorManager, window->wl.surface);
+            window->wl.colorSurfaceFeedback = wp_color_manager_v1_get_surface_feedback(_glfw.wl.colorManager, window->wl.surface);
+            if (window->wl.colorSurfaceFeedback) {
+                wp_color_management_surface_feedback_v1_add_listener(window->wl.colorSurfaceFeedback, &colorFeedbackListener, window);
+            }
+
+            getPreferredImageDescription(window);
+
+            wl_display_roundtrip(_glfw.wl.display);
+        }
+
+        if (!updateColorManagedSurface(window)) {
+            return GLFW_FALSE;
         }
     }
 
@@ -1804,7 +2045,7 @@ static const struct wl_pointer_listener pointerListener =
     pointerHandleFrame,
     pointerHandleAxisSource,
     pointerHandleAxisStop,
-    pointerHandleAxisDiscrete
+    pointerHandleAxisDiscrete,
 };
 
 static void keyboardHandleKeymap(void* userData,
@@ -2123,6 +2364,8 @@ static void dataOfferHandleOffer(void* userData,
                 _glfw.wl.offers[i].text_plain_utf8 = GLFW_TRUE;
             else if (strcmp(mimeType, "text/uri-list") == 0)
                 _glfw.wl.offers[i].text_uri_list = GLFW_TRUE;
+            else if (strcmp(mimeType, FILE_TRANSFER_PORTAL_MIME_TYPE) == 0)
+                _glfw.wl.offers[i].portal_file_transfer = GLFW_TRUE;
 
             break;
         }
@@ -2225,12 +2468,127 @@ static void dataDeviceHandleMotion(void* userData,
 {
 }
 
+// Receives a dropped file that was sent using the
+// [File Transfer](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.FileTransfer.html) portal.
+// This enables us to receive files when running as a Flatpak or Snap.
+static void dataDeviceHandleFileTransferPortalDrop(void* userData,
+                                                   struct wl_data_device* device)
+{
+    size_t length;
+    char* key = readDataOffer(_glfw.wl.dragOffer, FILE_TRANSFER_PORTAL_MIME_TYPE, &length);
+    if (!key)
+        return;
+
+    DBusError error;
+    dbus_error_init(&error);
+    DBusConnection* connection = dbus_bus_get(DBUS_BUS_SESSION, &error);
+    if (dbus_error_is_set(&error))
+    {
+        _glfwInputError(GLFW_PLATFORM_ERROR, "DBus: %s", error.message);
+        dbus_error_free(&error);
+        _glfw_free(key);
+        return;
+    }
+    dbus_connection_set_exit_on_disconnect(connection, FALSE);
+
+    DBusMessage* message = dbus_message_new_method_call(
+        "org.freedesktop.portal.Documents",
+        "/org/freedesktop/portal/documents",
+        "org.freedesktop.portal.FileTransfer",
+        "RetrieveFiles"
+    );
+    if (!message)
+    {
+        _glfwInputError(GLFW_OUT_OF_MEMORY, NULL);
+        _glfw_free(key);
+        return;
+    }
+    DBusMessageIter args, options;
+    dbus_message_iter_init_append(message, &args);
+    if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, &key))
+    {
+        _glfwInputError(GLFW_OUT_OF_MEMORY, NULL);
+        dbus_message_unref(message);
+        _glfw_free(key);
+        return;
+    }
+    if (!dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "{sv}", &options))
+    {
+        _glfwInputError(GLFW_OUT_OF_MEMORY, NULL);
+        dbus_message_unref(message);
+        _glfw_free(key);
+        return;
+    }
+    if (!dbus_message_iter_close_container(&args, &options))
+    {
+        _glfwInputError(GLFW_OUT_OF_MEMORY, NULL);
+        dbus_message_unref(message);
+        _glfw_free(key);
+        return;
+    }
+
+    DBusMessage* reply = dbus_connection_send_with_reply_and_block(connection, message, DBUS_TIMEOUT_INFINITE, &error);
+    if (dbus_error_is_set(&error))
+    {
+        _glfwInputError(GLFW_PLATFORM_ERROR, "DBus: %s", error.message);
+        dbus_error_free(&error);
+        dbus_message_unref(message);
+        _glfw_free(key);
+        return;
+    }
+
+    DBusMessageIter out, array;
+    if (!dbus_message_iter_init(reply, &out))
+    {
+        _glfwInputError(GLFW_OUT_OF_MEMORY, NULL);
+        dbus_message_unref(reply);
+        dbus_message_unref(message);
+        _glfw_free(key);
+        return;
+    }
+    if (dbus_message_iter_get_arg_type(&out) != DBUS_TYPE_ARRAY
+        || dbus_message_iter_get_element_type(&out) != DBUS_TYPE_STRING) {
+        _glfwInputError(GLFW_PLATFORM_ERROR, "DBus: Reply is not an array of strings");
+        dbus_message_unref(reply);
+        dbus_message_unref(message);
+        _glfw_free(key);
+        return;
+    }
+    dbus_message_iter_recurse(&out, &array);
+    int elements = dbus_message_iter_get_element_count(&out);
+    char** paths = _glfw_calloc(elements, sizeof(char*));
+    if (!paths) {
+        _glfwInputError(GLFW_OUT_OF_MEMORY, NULL);
+        dbus_message_unref(reply);
+        dbus_message_unref(message);
+        _glfw_free(key);
+        return;
+    }
+    int i = 0;
+    do {
+        dbus_message_iter_get_basic(&array, &paths[i++]);
+    } while (dbus_message_iter_next(&array));
+
+    _glfwInputDrop(_glfw.wl.dragFocus, elements, (const char**) paths);
+
+    _glfw_free(paths);
+    dbus_message_unref(reply);
+    dbus_message_unref(message);
+    _glfw_free(key);
+}
+
 static void dataDeviceHandleDrop(void* userData,
                                  struct wl_data_device* device)
 {
     if (!_glfw.wl.dragOffer)
         return;
-
+    
+    if (_glfw.wl.dragUsePortal)
+    {
+        dataDeviceHandleFileTransferPortalDrop(userData, device);
+        return;
+    }
+    
     char* string = readDataOfferAsString(_glfw.wl.dragOffer, "text/uri-list");
     if (string)
     {
@@ -2776,6 +3134,12 @@ void _glfwDestroyWindowWayland(_GLFWwindow* window)
     if (window->wl.fractionalScale)
         wp_fractional_scale_v1_destroy(window->wl.fractionalScale);
 
+    if (window->wl.colorSurfaceFeedback)
+        wp_color_management_surface_feedback_v1_destroy(window->wl.colorSurfaceFeedback);
+
+    if (window->wl.colorSurface)
+        wp_color_management_surface_v1_destroy(window->wl.colorSurface);
+
     if (window->wl.scalingViewport)
         wp_viewport_destroy(window->wl.scalingViewport);
 
@@ -2853,6 +3217,67 @@ void _glfwSetWindowPosWayland(_GLFWwindow* window, int xpos, int ypos)
                     "Wayland: The platform does not support setting the window position");
 }
 
+float _glfwGetWindowSdrWhiteLevelWayland(_GLFWwindow* window)
+{
+    if (window->wl.sdrWhiteLevel != 0.0f)
+        return window->wl.sdrWhiteLevel;
+    return 80.0f;
+}
+
+float _glfwGetWindowMinLuminanceWayland(_GLFWwindow* window)
+{
+    return window->wl.minLuminance;
+}
+
+float _glfwGetWindowMaxLuminanceWayland(_GLFWwindow* window)
+{
+    return window->wl.maxLuminance;
+}
+
+uint32_t _glfwGetWindowPrimariesWayland(_GLFWwindow* window)
+{
+    if (!supportsColorManagement(window))
+        return WP_COLOR_MANAGER_V1_PRIMARIES_SRGB;
+
+    if (_glfw.wl.colorManagerSupport.primaries[WP_COLOR_MANAGER_V1_PRIMARIES_BT2020])
+        return WP_COLOR_MANAGER_V1_PRIMARIES_BT2020;
+    return WP_COLOR_MANAGER_V1_PRIMARIES_SRGB;
+}
+
+uint32_t _glfwGetWindowTransferWayland(_GLFWwindow* window)
+{
+    if (!supportsColorManagement(window))
+        return WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB;
+
+    if (_glfw.wl.colorManagerSupport.tfs[WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ])
+        return WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ;
+    if (_glfw.wl.colorManagerSupport.tfs[WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_HLG])
+        return WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_HLG;
+    if (_glfw.wl.colorManagerSupport.tfs[WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_EXT_SRGB])
+        return WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_EXT_SRGB;
+    return WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_SRGB;
+}
+
+uint32_t _glfwGetWindowRenderingIntentWayland(_GLFWwindow* window)
+{
+    if (!supportsColorManagement(window))
+        return WP_COLOR_MANAGER_V1_RENDER_INTENT_RELATIVE;
+
+    // Our goal is to be as colorimetrically accurate as possible without
+    // falsifying how the image was intended to be displayed. The relative
+    // rendering intent preserves colors exactly while adapting to the white
+    // point of the display's gamut. Lastly, the perceptual intent is our
+    // fallback when relative colorimetric isn't available, as it is guaranteed
+    // to be supported when color management is supported. the perceptual
+    // intent may lead to the most pleasing image in terms of smooth color
+    // transitions, but that's at the cost of color accuracy / saturation.
+    if (_glfw.wl.colorManagerSupport.intents[WP_COLOR_MANAGER_V1_RENDER_INTENT_RELATIVE])
+        return WP_COLOR_MANAGER_V1_RENDER_INTENT_RELATIVE;
+
+    // Perceptual is guaranteed to be supported when color management is supported
+    return WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL;
+}
+
 void _glfwGetWindowSizeWayland(_GLFWwindow* window, int* width, int* height)
 {
     if (width)
@@ -2878,6 +3303,26 @@ void _glfwSetWindowSizeWayland(_GLFWwindow* window, int width, int height)
                 libdecor_state_new(window->wl.width, window->wl.height);
             libdecor_frame_commit(window->wl.libdecor.frame, frameState, NULL);
             libdecor_state_free(frameState);
+        }
+
+        if (window->wl.xdg.toplevel)
+        {
+            // Some Wayland compositors (e.g. Hyprland) require setting both
+            // min and max size to the same values to effectively resize a
+            // floating window. Hence, when resizing under wayland, set min/max
+            // sizes to the newly desired window size for a moment, then
+            // restore the limits.
+            // https://github.com/hyprwm/Hyprland/discussions/11723
+            xdg_toplevel_set_min_size(window->wl.xdg.toplevel,
+                                      window->wl.width,
+                                      window->wl.height);
+            xdg_toplevel_set_max_size(window->wl.xdg.toplevel,
+                                      window->wl.width,
+                                      window->wl.height);
+
+            wl_surface_commit(window->wl.surface);
+
+            updateXdgSizeLimits(window);
         }
 
         if (window->wl.visible)
@@ -3122,6 +3567,16 @@ void _glfwSetWindowMonitorWayland(_GLFWwindow* window,
         acquireMonitor(window);
     else
         _glfwSetWindowSizeWayland(window, width, height);
+}
+
+GLFWmonitor* _glfwGetWindowCurrentMonitorWayland(_GLFWwindow* window)
+{
+    if (window->wl.outputScaleCount > 0)
+    {
+        return wl_output_get_user_data(window->wl.outputScales[0].output);
+    }
+
+    return NULL;
 }
 
 GLFWbool _glfwWindowFocusedWayland(_GLFWwindow* window)
@@ -3953,6 +4408,64 @@ GLFWAPI struct wl_surface* glfwGetWaylandWindow(GLFWwindow* handle)
     assert(window != NULL);
 
     return window->wl.surface;
+}
+
+GLFWAPI void glfwSetWaylandClipboardData(const char* data, const char* type, size_t length) {
+    if (_glfw.wl.selectionSource)
+    {
+        wl_data_source_destroy(_glfw.wl.selectionSource);
+        _glfw.wl.selectionSource = NULL;
+    }
+
+    char* copy = _glfw_calloc(length, 1);
+    memcpy(copy, data, length);
+    if (!copy)
+    {
+        _glfwInputError(GLFW_OUT_OF_MEMORY, NULL);
+        return;
+    }
+
+    _glfw_free(_glfw.wl.clipboardString);
+    _glfw.wl.clipboardString = copy;
+    _glfw.wl.clipboardLength = length;
+
+    _glfw.wl.selectionSource =
+        wl_data_device_manager_create_data_source(_glfw.wl.dataDeviceManager);
+    if (!_glfw.wl.selectionSource)
+    {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Wayland: Failed to create clipboard data source");
+        return;
+    }
+    wl_data_source_add_listener(_glfw.wl.selectionSource,
+                                &dataSourceListener,
+                                NULL);
+    wl_data_source_offer(_glfw.wl.selectionSource, type);
+    wl_data_device_set_selection(_glfw.wl.dataDevice,
+                                 _glfw.wl.selectionSource,
+                                 _glfw.wl.serial);
+
+}
+
+GLFWAPI const char* glfwGetWaylandClipboardData(const char* type, size_t* length) {
+    if (_glfw.wl.selectionSource) {
+        *length = _glfw.wl.clipboardLength;
+        return _glfw.wl.clipboardString;
+    }
+
+    if (!_glfw.wl.selectionOffer)
+    {
+        _glfwInputError(GLFW_FORMAT_UNAVAILABLE,
+                        "Wayland: No clipboard data available");
+        *length = 0;
+        return NULL;
+    }
+
+    _glfw_free(_glfw.wl.clipboardString);
+    _glfw.wl.clipboardString = readDataOffer(_glfw.wl.selectionOffer, type, &_glfw.wl.clipboardLength);
+
+    *length = _glfw.wl.clipboardLength;
+    return _glfw.wl.clipboardString;
 }
 
 #endif // _GLFW_WAYLAND

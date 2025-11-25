@@ -2439,6 +2439,31 @@ void _glfwSetWindowPosX11(_GLFWwindow* window, int xpos, int ypos)
     XFlush(_glfw.x11.display);
 }
 
+float _glfwGetWindowSdrWhiteLevelX11(_GLFWwindow* window)
+{
+    return 80.0f;
+}
+
+float _glfwGetWindowMinLuminanceX11(_GLFWwindow* window)
+{
+    return 0.0f;
+}
+
+float _glfwGetWindowMaxLuminanceX11(_GLFWwindow* window)
+{
+    return 0.0f;
+}
+
+uint32_t _glfwGetWindowPrimariesX11(_GLFWwindow* window)
+{
+    return 1; // sRGB
+}
+
+uint32_t _glfwGetWindowTransferX11(_GLFWwindow* window)
+{
+    return 10; // EXT sRGB
+}
+
 void _glfwGetWindowSizeX11(_GLFWwindow* window, int* width, int* height)
 {
     XWindowAttributes attribs;
@@ -2806,6 +2831,33 @@ void _glfwSetWindowMonitorX11(_GLFWwindow* window,
     }
 
     XFlush(_glfw.x11.display);
+}
+
+GLFWmonitor* _glfwGetWindowCurrentMonitorX11(_GLFWwindow* window)
+{
+    int sizeX, sizeY;
+    _glfwGetWindowSizeX11(window, &sizeX, &sizeY);
+    int centerX, centerY;
+    _glfwGetWindowPosX11(window, &centerX, &centerY);
+    centerX += sizeX / 2;
+    centerY += sizeY / 2;
+
+    int monitorCount = 0;
+    GLFWmonitor** monitors = glfwGetMonitors(&monitorCount);
+    for (int i = 0;  i < monitorCount;  i++)
+    {
+        GLFWmonitor* monitor = monitors[i];
+        int x, y, width, height;
+        glfwGetMonitorWorkarea(monitor, &x, &y, &width, &height);
+
+        if (centerX >= x && centerX < x + width &&
+            centerY >= y && centerY < y + height)
+        {
+            return monitor;
+        }
+    }
+
+    return NULL;
 }
 
 GLFWbool _glfwWindowFocusedX11(_GLFWwindow* window)

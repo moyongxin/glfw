@@ -1180,6 +1180,32 @@ void _glfwSetWindowPosCocoa(_GLFWwindow* window, int x, int y)
     } // autoreleasepool
 }
 
+float _glfwGetWindowSdrWhiteLevelCocoa(_GLFWwindow* window)
+{
+    // On Cocoa, we'll render via metal configured to the sRGB color space, which'll give us a white level of 80 nits.
+    return 80.0f;
+}
+
+float _glfwGetWindowMinLuminanceCocoa(_GLFWwindow* window)
+{
+    return 0.0f;
+}
+
+float _glfwGetWindowMaxLuminanceCocoa(_GLFWwindow* window)
+{
+    return 0.0f;
+}
+
+uint32_t _glfwGetWindowPrimariesCocoa(_GLFWwindow* window)
+{
+    return 1; // sRGB
+}
+
+uint32_t _glfwGetWindowTransferCocoa(_GLFWwindow* window)
+{
+    return 10; // EXT sRGB
+}
+
 void _glfwGetWindowSizeCocoa(_GLFWwindow* window, int* width, int* height)
 {
     @autoreleasepool {
@@ -1489,6 +1515,27 @@ void _glfwSetWindowMonitorCocoa(_GLFWwindow* window,
         //       title property but the miniwindow title property is unaffected
         [window->ns.object setTitle:[window->ns.object miniwindowTitle]];
     }
+
+    } // autoreleasepool
+}
+
+GLFWmonitor* _glfwGetWindowCurrentMonitorCocoa(_GLFWwindow* window)
+{
+    @autoreleasepool {
+
+    const NSScreen* screen = [window->ns.object screen] ?: [NSScreen mainScreen];
+
+    int monitorCount;
+    GLFWmonitor **monitors = glfwGetMonitors(&monitorCount);
+
+    for (int i = 0;  i < monitorCount;  i++)
+    {
+        _GLFWmonitor* monitor = (_GLFWmonitor*) monitors[i];
+        if (monitor->ns.screen == screen)
+            return monitors[i];
+    }
+
+    return NULL;
 
     } // autoreleasepool
 }

@@ -52,10 +52,12 @@
 
 #define GLX_VENDOR 1
 #define GLX_RGBA_BIT 0x00000001
+#define GLX_RGBA_FLOAT_BIT 0x00000004
 #define GLX_WINDOW_BIT 0x00000001
 #define GLX_DRAWABLE_TYPE 0x8010
 #define GLX_RENDER_TYPE 0x8011
 #define GLX_RGBA_TYPE 0x8014
+#define GLX_RGBA_FLOAT_TYPE 0x20b9
 #define GLX_DOUBLEBUFFER 5
 #define GLX_STEREO 6
 #define GLX_AUX_BUFFERS 7
@@ -940,6 +942,11 @@ void _glfwSetWindowAspectRatioX11(_GLFWwindow* window, int numer, int denom);
 void _glfwGetFramebufferSizeX11(_GLFWwindow* window, int* width, int* height);
 void _glfwGetWindowFrameSizeX11(_GLFWwindow* window, int* left, int* top, int* right, int* bottom);
 void _glfwGetWindowContentScaleX11(_GLFWwindow* window, float* xscale, float* yscale);
+float _glfwGetWindowSdrWhiteLevelX11(_GLFWwindow* window);
+float _glfwGetWindowMinLuminanceX11(_GLFWwindow* window);
+float _glfwGetWindowMaxLuminanceX11(_GLFWwindow* window);
+uint32_t _glfwGetWindowPrimariesX11(_GLFWwindow* window);
+uint32_t _glfwGetWindowTransferX11(_GLFWwindow* window);
 void _glfwIconifyWindowX11(_GLFWwindow* window);
 void _glfwRestoreWindowX11(_GLFWwindow* window);
 void _glfwMaximizeWindowX11(_GLFWwindow* window);
@@ -948,6 +955,7 @@ void _glfwHideWindowX11(_GLFWwindow* window);
 void _glfwRequestWindowAttentionX11(_GLFWwindow* window);
 void _glfwFocusWindowX11(_GLFWwindow* window);
 void _glfwSetWindowMonitorX11(_GLFWwindow* window, _GLFWmonitor* monitor, int xpos, int ypos, int width, int height, int refreshRate);
+GLFWmonitor* _glfwGetWindowCurrentMonitorX11(_GLFWwindow* window);
 GLFWbool _glfwWindowFocusedX11(_GLFWwindow* window);
 GLFWbool _glfwWindowIconifiedX11(_GLFWwindow* window);
 GLFWbool _glfwWindowVisibleX11(_GLFWwindow* window);
