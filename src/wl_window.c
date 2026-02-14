@@ -3196,8 +3196,8 @@ void _glfwSetWindowTitleWayland(_GLFWwindow* window, const char* title)
 void _glfwSetWindowIconWayland(_GLFWwindow* window,
                                int count, const GLFWimage* images)
 {
-    _glfwInputError(GLFW_FEATURE_UNAVAILABLE,
-                    "Wayland: The platform does not support setting the window icon");
+    //_glfwInputError(GLFW_FEATURE_UNAVAILABLE,
+    //                "Wayland: The platform does not support setting the window icon");
 }
 
 void _glfwGetWindowPosWayland(_GLFWwindow* window, int* xpos, int* ypos)
@@ -3205,16 +3205,16 @@ void _glfwGetWindowPosWayland(_GLFWwindow* window, int* xpos, int* ypos)
     // A Wayland client is not aware of its position, so just warn and leave it
     // as (0, 0)
 
-    _glfwInputError(GLFW_FEATURE_UNAVAILABLE,
-                    "Wayland: The platform does not provide the window position");
+    //_glfwInputError(GLFW_FEATURE_UNAVAILABLE,
+    //                "Wayland: The platform does not provide the window position");
 }
 
 void _glfwSetWindowPosWayland(_GLFWwindow* window, int xpos, int ypos)
 {
     // A Wayland client can not set its position, so just warn
 
-    _glfwInputError(GLFW_FEATURE_UNAVAILABLE,
-                    "Wayland: The platform does not support setting the window position");
+    //_glfwInputError(GLFW_FEATURE_UNAVAILABLE,
+    //                "Wayland: The platform does not support setting the window position");
 }
 
 float _glfwGetWindowSdrWhiteLevelWayland(_GLFWwindow* window)
@@ -3658,8 +3658,8 @@ void _glfwSetWindowDecoratedWayland(_GLFWwindow* window, GLFWbool enabled)
 
 void _glfwSetWindowFloatingWayland(_GLFWwindow* window, GLFWbool enabled)
 {
-    _glfwInputError(GLFW_FEATURE_UNAVAILABLE,
-                    "Wayland: Platform does not support making a window floating");
+    //_glfwInputError(GLFW_FEATURE_UNAVAILABLE,
+    //                "Wayland: Platform does not support making a window floating");
 }
 
 void _glfwSetWindowMousePassthroughWayland(_GLFWwindow* window, GLFWbool enabled)
@@ -3681,8 +3681,8 @@ float _glfwGetWindowOpacityWayland(_GLFWwindow* window)
 
 void _glfwSetWindowOpacityWayland(_GLFWwindow* window, float opacity)
 {
-    _glfwInputError(GLFW_FEATURE_UNAVAILABLE,
-                    "Wayland: The platform does not support setting the window opacity");
+    //_glfwInputError(GLFW_FEATURE_UNAVAILABLE,
+    //                "Wayland: The platform does not support setting the window opacity");
 }
 
 void _glfwSetRawMouseMotionWayland(_GLFWwindow* window, GLFWbool enabled)
