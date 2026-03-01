@@ -1718,6 +1718,75 @@ static void handleEvents(double* timeout)
 
 // Reads the specified data offer as the specified MIME type
 //
+static char* readDataOffer(struct wl_data_offer* offer, const char* mimeType, size_t* length)
+{
+    int fds[2];
+
+    if (pipe2(fds, O_CLOEXEC) == -1)
+    {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Wayland: Failed to create pipe for data offer: %s",
+                        strerror(errno));
+        return NULL;
+    }
+
+    wl_data_offer_receive(offer, mimeType, fds[1]);
+    flushDisplay();
+    close(fds[1]);
+
+    char* data = NULL;
+    size_t size = 0;
+    *length = 0;
+
+    const size_t readSize = 1024 * 64;
+    size_t allocSize = readSize;
+
+    for (;;)
+    {
+        const size_t requiredSize = *length + readSize + 1;
+        if (requiredSize > size)
+        {
+            const size_t newSize = *length + allocSize + 1;
+
+            char* longer = _glfw_realloc(data, newSize);
+            if (!longer)
+            {
+                _glfwInputError(GLFW_OUT_OF_MEMORY, NULL);
+                close(fds[0]);
+                return NULL;
+            }
+
+            data = longer;
+            size = newSize;
+            allocSize *= 2;
+        }
+
+        const ssize_t result = read(fds[0], data + *length, readSize);
+        if (result == 0)
+            break;
+        else if (result == -1)
+        {
+            if (errno == EINTR)
+                continue;
+
+            _glfwInputError(GLFW_PLATFORM_ERROR,
+                            "Wayland: Failed to read from data offer pipe: %s",
+                            strerror(errno));
+            close(fds[0]);
+            return NULL;
+        }
+
+        *length += result;
+    }
+
+    close(fds[0]);
+    data[*length] = '\0'; // Null-terminate in case we hold a string
+
+    return data;
+}
+
+// Reads the specified data offer as the specified MIME type
+//
 static char* readDataOfferAsString(struct wl_data_offer* offer, const char* mimeType)
 {
     int fds[2];
