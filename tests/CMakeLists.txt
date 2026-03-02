@@ -42,11 +42,6 @@ add_executable(title WIN32 MACOSX_BUNDLE title.c ${GLAD_GL})
 add_executable(triangle-vulkan WIN32 triangle-vulkan.c ${GLAD_VULKAN})
 add_executable(window WIN32 MACOSX_BUNDLE window.c ${GLAD_GL})
 
-
-if (WIN32)
-    add_executable(native WIN32 native.c ${GLAD_GL})
-endif()
-
 target_link_libraries(empty Threads::Threads)
 target_link_libraries(threads Threads::Threads)
 if (RT_LIBRARY)

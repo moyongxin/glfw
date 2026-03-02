@@ -48,6 +48,16 @@ jobs:
             - name: Build Wayland+X11 shared library
               run: cmake --build build-full-shared --parallel
 
+            - name: Upload Linux artifacts
+              uses: actions/upload-artifact@v3
+              with:
+                name: linux-clang-artifacts
+                path: |
+                  build-null-shared/
+                  build-x11-shared/
+                  build-wayland-shared/
+                  build-full-shared/
+
     build-macos-clang:
         name: macOS (Clang)
         runs-on: macos-latest
@@ -74,6 +84,14 @@ jobs:
             - name: Build Cocoa shared library
               run: cmake --build build-cocoa-shared --parallel
 
+            - name: Upload macOS artifacts
+              uses: actions/upload-artifact@v3
+              with:
+                name: macos-clang-artifacts
+                path: |
+                  build-null-shared/
+                  build-cocoa-shared/
+
     build-windows-vs2022:
         name: Windows (VS2022)
         runs-on: windows-latest
@@ -97,4 +115,12 @@ jobs:
               run: cmake -B build-win32-shared-x64 -G "Visual Studio 17 2022" -A x64 -D BUILD_SHARED_LIBS=ON
             - name: Build Win32 shared x64 library
               run: cmake --build build-win32-shared-x64 --parallel
+
+            - name: Upload Windows artifacts
+              uses: actions/upload-artifact@v3
+              with:
+                name: windows-vs2022-artifacts
+                path: |
+                  build-win32-shared-x86/
+                  build-win32-shared-x64/
 
