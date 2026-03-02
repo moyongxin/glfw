@@ -1204,7 +1204,7 @@ float _glfwGetWindowMaxLuminanceCocoa(_GLFWwindow* window)
     {
         _GLFWmonitor* monitor = (_GLFWmonitor*) monitors[i];
         if (monitor->ns.screen == screen)
-            return 80.0f * (float)monitor->ns.screen.maximumPotentialExtendedDynamicRangeColorComponentValue;
+            return 80.0f * (float)monitor->ns.screen->maximumPotentialExtendedDynamicRangeColorComponentValue;
     }
 
     return 0.0f;
