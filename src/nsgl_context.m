@@ -282,7 +282,7 @@ GLFWbool _glfwCreateContextNSGL(_GLFWwindow* window,
     if (fbconfig->doublebuffer)
         ADD_ATTRIB(NSOpenGLPFADoubleBuffer);
     
-    if (fbconfig->floatingpoint)
+    if (fbconfig->floatbuffer)
         ADD_ATTRIB(NSOpenGLPFAColorFloat);
 
     if (fbconfig->samples != GLFW_DONT_CARE)
