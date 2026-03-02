@@ -58,7 +58,7 @@ if (GLFW_BUILD_X11 OR GLFW_BUILD_WAYLAND)
     target_compile_definitions(input_text PRIVATE FONTCONFIG_ENABLED)
 endif()
 
-set(GUI_ONLY_BINARIES empty gamma icon input_text inputlag joysticks native tearing threads
+set(GUI_ONLY_BINARIES empty gamma icon input_text inputlag joysticks tearing threads
     timeout title triangle-vulkan window)
 set(CONSOLE_BINARIES allocator clipboard events msaa glfwinfo iconify monitors
     reopen cursor)
