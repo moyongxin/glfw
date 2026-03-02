@@ -982,6 +982,7 @@ static GLFWbool createNativeWindow(_GLFWwindow* window,
         [window->ns.object setFrameAutosaveName:@(wndconfig->ns.frameName)];
 
     window->ns.view = [[GLFWContentView alloc] initWithGlfwWindow:window];
+    [window->ns.view setWantsExtendedDynamicRangeOpenGLSurface: fbconfig->floatbuffer];
     window->ns.scaleFramebuffer = wndconfig->scaleFramebuffer;
 
     if (fbconfig->transparent)
@@ -1182,7 +1183,6 @@ void _glfwSetWindowPosCocoa(_GLFWwindow* window, int x, int y)
 
 float _glfwGetWindowSdrWhiteLevelCocoa(_GLFWwindow* window)
 {
-    // On Cocoa, we'll render via metal configured to the sRGB color space, which'll give us a white level of 80 nits.
     return 80.0f;
 }
 
@@ -1193,7 +1193,23 @@ float _glfwGetWindowMinLuminanceCocoa(_GLFWwindow* window)
 
 float _glfwGetWindowMaxLuminanceCocoa(_GLFWwindow* window)
 {
+    @autoreleasepool {
+
+    const NSScreen* screen = [window->ns.object screen] ?: [NSScreen mainScreen];
+
+    int monitorCount;
+    GLFWmonitor **monitors = glfwGetMonitors(&monitorCount);
+
+    for (int i = 0;  i < monitorCount;  i++)
+    {
+        _GLFWmonitor* monitor = (_GLFWmonitor*) monitors[i];
+        if (monitor->ns.screen == screen)
+            return 80.0f * (float)monitor->ms.screen.maximumPotentialExtendedDynamicRangeColorComponentValue;
+    }
+
     return 0.0f;
+
+    } // autoreleasepool
 }
 
 uint32_t _glfwGetWindowPrimariesCocoa(_GLFWwindow* window)

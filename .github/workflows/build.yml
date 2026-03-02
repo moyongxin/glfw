@@ -49,7 +49,7 @@ jobs:
               run: cmake --build build-full-shared --parallel
 
             - name: Upload Linux artifacts
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
                 name: linux-clang-artifacts
                 path: |
@@ -85,7 +85,7 @@ jobs:
               run: cmake --build build-cocoa-shared --parallel
 
             - name: Upload macOS artifacts
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
                 name: macos-clang-artifacts
                 path: |
@@ -117,7 +117,7 @@ jobs:
               run: cmake --build build-win32-shared-x64 --parallel
 
             - name: Upload Windows artifacts
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
                 name: windows-vs2022-artifacts
                 path: |
