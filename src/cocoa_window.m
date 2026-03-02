@@ -1196,19 +1196,7 @@ float _glfwGetWindowMaxLuminanceCocoa(_GLFWwindow* window)
     @autoreleasepool {
 
     const NSScreen* screen = [window->ns.object screen] ?: [NSScreen mainScreen];
-
-    int monitorCount;
-    GLFWmonitor **monitors = glfwGetMonitors(&monitorCount);
-
-    for (int i = 0;  i < monitorCount;  i++)
-    {
-        _GLFWmonitor* monitor = (_GLFWmonitor*) monitors[i];
-        if (monitor->ns.screen == screen)
-            return 80.0f * (float)monitor->ns.screen->maximumPotentialExtendedDynamicRangeColorComponentValue;
-    }
-
-    return 0.0f;
-
+    return 80.0f * (float)screen.maximumPotentialExtendedDynamicRangeColorComponentValue;
     } // autoreleasepool
 }
 
