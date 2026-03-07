@@ -66,7 +66,8 @@ static _GLFWinitconfig _glfwInitHints =
     },
     .wl =
     {
-        .libdecorMode = GLFW_WAYLAND_PREFER_LIBDECOR
+        .libdecorMode = GLFW_WAYLAND_PREFER_LIBDECOR,
+        .colorManagement = GLFW_FALSE
     },
 };
 
@@ -492,6 +493,9 @@ GLFWAPI void glfwInitHint(int hint, int value)
             return;
         case GLFW_WAYLAND_LIBDECOR:
             _glfwInitHints.wl.libdecorMode = value;
+            return;
+        case GLFW_WAYLAND_COLOR_MANAGEMENT:
+            _glfwInitHints.wl.colorManagement = value ? GLFW_TRUE : GLFW_FALSE;
             return;
     }
 
