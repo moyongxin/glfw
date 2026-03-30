@@ -431,6 +431,8 @@ struct _GLFWwndconfig
     struct {
         GLFWbool  keymenu;
         GLFWbool  showDefault;
+        GLFWbool  dxgiSwapchainFallback;
+        GLFWbool  dxgiSwapchainForce;
     } win32;
     struct {
         char      appId[256];
@@ -1080,4 +1082,3 @@ int _glfw_max(int a, int b);
 void* _glfw_calloc(size_t count, size_t size);
 void* _glfw_realloc(void* pointer, size_t size);
 void _glfw_free(void* pointer);
-

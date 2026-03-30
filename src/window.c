@@ -390,6 +390,12 @@ GLFWAPI void glfwWindowHint(int hint, int value)
         case GLFW_WIN32_SHOWDEFAULT:
             _glfw.hints.window.win32.showDefault = value ? GLFW_TRUE : GLFW_FALSE;
             return;
+        case GLFW_WIN32_DXGI_SWAPCHAIN_FALLBACK:
+            _glfw.hints.window.win32.dxgiSwapchainFallback = value ? GLFW_TRUE : GLFW_FALSE;
+            return;
+        case GLFW_WIN32_DXGI_SWAPCHAIN_FORCE:
+            _glfw.hints.window.win32.dxgiSwapchainForce = value ? GLFW_TRUE : GLFW_FALSE;
+            return;
         case GLFW_COCOA_GRAPHICS_SWITCHING:
             _glfw.hints.context.nsgl.offline = value ? GLFW_TRUE : GLFW_FALSE;
             return;
@@ -674,6 +680,21 @@ GLFWAPI uint32_t glfwGetWindowTransfer(GLFWwindow* handle)
     assert(window != NULL);
 
     return _glfw.platform.getWindowTransfer(window);
+}
+
+GLFWAPI uint32_t glfwGetWindowSwapchainImageTexture(GLFWwindow* handle)
+{
+    _GLFW_REQUIRE_INIT_OR_RETURN(0);
+
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    assert(window != NULL);
+
+#if defined(_GLFW_WIN32)
+    return _glfwGetWindowSwapchainImageTextureWin32(window);
+#else
+    (void) window;
+    return 0;
+#endif
 }
 
 
@@ -1279,4 +1300,3 @@ GLFWAPI void glfwPostEmptyEvent(void)
     _GLFW_REQUIRE_INIT();
     _glfw.platform.postEmptyEvent();
 }
-

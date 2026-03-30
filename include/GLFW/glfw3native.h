@@ -224,6 +224,23 @@ GLFWAPI const char* glfwGetWin32Monitor(GLFWmonitor* monitor);
  */
 GLFWAPI HWND glfwGetWin32Window(GLFWwindow* window);
 
+/*! @brief Returns the native image handle of the DXGI swapchain image.
+ *
+ *  @return A platform-specific handle encoded as an unsigned 64-bit integer,
+ *  or zero if DXGI swapchain fallback is not active for this window.
+ *
+ *  @errors Possible errors include @ref GLFW_NOT_INITIALIZED and @ref
+ *  GLFW_PLATFORM_UNAVAILABLE.
+ *
+ *  @thread_safety This function may be called from any thread.  Access is not
+ *  synchronized.
+ *
+ *  @since Added in version 3.5.
+ *
+ *  @ingroup native
+ */
+GLFWAPI uint64_t glfwGetWin32SwapchainImageHandle(GLFWwindow* window);
+
 /*! @brief Wraps an existing `HWND` in a new GLFW window object.
  *
  *  This function creates a GLFW window object and its associated OpenGL or
@@ -755,4 +772,3 @@ GLFWAPI OSMesaContext glfwGetOSMesaContext(GLFWwindow* window);
 #endif
 
 #endif /* _glfw3_native_h_ */
-

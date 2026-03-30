@@ -1446,6 +1446,9 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
                 window->win32.width = width;
                 window->win32.height = height;
 
+                if (window->win32.dxgiInteropActive)
+                    _glfwResizeDXGIFallbackWin32(window, width, height);
+
                 _glfwInputFramebufferSize(window, width, height);
                 _glfwInputWindowSize(window, width, height);
             }
@@ -1819,6 +1822,8 @@ static int createNativeWindow(_GLFWwindow* window,
     window->win32.scaleToMonitor = wndconfig->scaleToMonitor;
     window->win32.keymenu = wndconfig->win32.keymenu;
     window->win32.showDefault = wndconfig->win32.showDefault;
+    window->win32.dxgiSwapchainFallback = wndconfig->win32.dxgiSwapchainFallback;
+    window->win32.dxgiSwapchainForce = wndconfig->win32.dxgiSwapchainForce;
 
     if (!window->monitor)
     {
@@ -1903,10 +1908,27 @@ GLFWbool _glfwCreateWindowWin32(_GLFWwindow* window,
     {
         if (ctxconfig->source == GLFW_NATIVE_CONTEXT_API)
         {
+            GLFWbool wglCreated;
+
             if (!_glfwInitWGL())
                 return GLFW_FALSE;
-            if (!_glfwCreateContextWGL(window, ctxconfig, fbconfig))
-                return GLFW_FALSE;
+            wglCreated = _glfwCreateContextWGL(window, ctxconfig, fbconfig);
+            if (!wglCreated)
+            {
+                if (window->win32.dxgiSwapchainFallback ||
+                    window->win32.dxgiSwapchainForce)
+                {
+                    if (!_glfwCreateDXGIFallbackWin32(window, ctxconfig, fbconfig))
+                        return GLFW_FALSE;
+                }
+                else
+                    return GLFW_FALSE;
+            }
+            else if (window->win32.dxgiSwapchainForce)
+            {
+                if (!_glfwCreateDXGIFallbackWin32(window, ctxconfig, fbconfig))
+                    return GLFW_FALSE;
+            }
         }
         else if (ctxconfig->source == GLFW_EGL_CONTEXT_API)
         {
@@ -1923,8 +1945,11 @@ GLFWbool _glfwCreateWindowWin32(_GLFWwindow* window,
                 return GLFW_FALSE;
         }
 
-        if (!_glfwRefreshContextAttribs(window, ctxconfig))
-            return GLFW_FALSE;
+        if (!window->win32.dxgiUsesHelperContext)
+        {
+            if (!_glfwRefreshContextAttribs(window, ctxconfig))
+                return GLFW_FALSE;
+        }
     }
 
     if (wndconfig->mousePassthrough)
@@ -1955,6 +1980,8 @@ GLFWbool _glfwCreateWindowWin32(_GLFWwindow* window,
 
 void _glfwDestroyWindowWin32(_GLFWwindow* window)
 {
+    _glfwDestroyDXGIFallbackWin32(window);
+
     if (window->monitor)
         releaseMonitor(window);
 
@@ -2273,11 +2300,17 @@ float _glfwGetWindowMaxLuminanceWin32(_GLFWwindow* window) {
 
 uint32_t _glfwGetWindowPrimariesWin32(_GLFWwindow* window)
 {
+    if (window->win32.dxgiInteropActive && window->win32.dxgiColorPrimaries)
+        return window->win32.dxgiColorPrimaries;
+
     return 1; // sRGB
 }
 
 uint32_t _glfwGetWindowTransferWin32(_GLFWwindow* window)
 {
+    if (window->win32.dxgiInteropActive && window->win32.dxgiColorTransfer)
+        return window->win32.dxgiColorTransfer;
+
     // If we managed to get a fp16 frame buffer on Windows, we need to output scRGB
     // i.e. linear colors w/ sRGB primaries.
     return window->bitsPerSample == 16 ? 5 : 10; // 5 == linear, 10 == EXT sRGB
@@ -3280,6 +3313,23 @@ GLFWAPI HWND glfwGetWin32Window(GLFWwindow* handle)
     return window->win32.handle;
 }
 
+GLFWAPI uint64_t glfwGetWin32SwapchainImageHandle(GLFWwindow* handle)
+{
+    _GLFW_REQUIRE_INIT_OR_RETURN(0);
+
+    if (_glfw.platform.platformID != GLFW_PLATFORM_WIN32)
+    {
+        _glfwInputError(GLFW_PLATFORM_UNAVAILABLE,
+                        "Win32: Platform not initialized");
+        return 0;
+    }
+
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    assert(window != NULL);
+
+    return _glfwGetWindowSwapchainImageHandleWin32(window);
+}
+
 GLFWAPI GLFWwindow* glfwAttachWin32Window(HWND handle, GLFWwindow* share)
 {
     _GLFWfbconfig fbconfig;
@@ -3328,6 +3378,8 @@ GLFWAPI GLFWwindow* glfwAttachWin32Window(HWND handle, GLFWwindow* share)
     window->win32.externalWindowProc =
         GetWindowLongPtrW(window->win32.handle, GWLP_WNDPROC);
     SetWindowLongPtrW(window->win32.handle, GWLP_WNDPROC, (LONG_PTR) windowProc);
+    window->win32.dxgiSwapchainFallback = wndconfig.win32.dxgiSwapchainFallback;
+    window->win32.dxgiSwapchainForce = wndconfig.win32.dxgiSwapchainForce;
 
     {
         const DWORD style = GetWindowLongW(window->win32.handle, GWL_STYLE);
@@ -3348,10 +3400,27 @@ GLFWAPI GLFWwindow* glfwAttachWin32Window(HWND handle, GLFWwindow* share)
     {
         if (ctxconfig.source == GLFW_NATIVE_CONTEXT_API)
         {
+            GLFWbool wglCreated;
+
             if (!_glfwInitWGL())
                 return GLFW_FALSE;
-            if (!_glfwCreateContextWGL(window, &ctxconfig, &fbconfig))
-                return GLFW_FALSE;
+            wglCreated = _glfwCreateContextWGL(window, &ctxconfig, &fbconfig);
+            if (!wglCreated)
+            {
+                if (window->win32.dxgiSwapchainFallback ||
+                    window->win32.dxgiSwapchainForce)
+                {
+                    if (!_glfwCreateDXGIFallbackWin32(window, &ctxconfig, &fbconfig))
+                        return GLFW_FALSE;
+                }
+                else
+                    return GLFW_FALSE;
+            }
+            else if (window->win32.dxgiSwapchainForce)
+            {
+                if (!_glfwCreateDXGIFallbackWin32(window, &ctxconfig, &fbconfig))
+                    return GLFW_FALSE;
+            }
         }
         else if (ctxconfig.source == GLFW_EGL_CONTEXT_API)
         {
@@ -3369,7 +3438,8 @@ GLFWAPI GLFWwindow* glfwAttachWin32Window(HWND handle, GLFWwindow* share)
         }
     }
 
-    if (ctxconfig.client != GLFW_NO_API)
+    if (ctxconfig.client != GLFW_NO_API &&
+        !window->win32.dxgiUsesHelperContext)
     {
         if (!_glfwRefreshContextAttribs(window, &ctxconfig))
         {
@@ -3382,4 +3452,3 @@ GLFWAPI GLFWwindow* glfwAttachWin32Window(HWND handle, GLFWwindow* share)
 }
 
 #endif // _GLFW_WIN32
-

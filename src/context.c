@@ -665,6 +665,14 @@ GLFWAPI void glfwSwapBuffers(GLFWwindow* handle)
         return;
     }
 
+#if defined(_GLFW_WIN32)
+    if (window->win32.dxgiInteropActive)
+    {
+        _glfwSwapBuffersDXGIFallbackWin32(window);
+        return;
+    }
+#endif
+
     window->context.swapBuffers(window);
 }
 
@@ -681,6 +689,14 @@ GLFWAPI void glfwSwapInterval(int interval)
                         "Cannot set swap interval without a current OpenGL or OpenGL ES context");
         return;
     }
+
+#if defined(_GLFW_WIN32)
+    if (window->win32.dxgiInteropActive)
+    {
+        window->win32.dxgiSwapInterval = interval;
+        return;
+    }
+#endif
 
     window->context.swapInterval(interval);
 }
@@ -768,4 +784,3 @@ GLFWAPI GLFWglproc glfwGetProcAddress(const char* procname)
 
     return window->context.getProcAddress(procname);
 }
-

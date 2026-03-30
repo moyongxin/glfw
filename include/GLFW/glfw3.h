@@ -1141,9 +1141,15 @@ extern "C" {
 /*! @brief Win32 specific [window hint](@ref GLFW_WIN32_SHOWDEFAULT_hint).
  */
 #define GLFW_WIN32_SHOWDEFAULT      0x00025002
+/*! @brief Win32 specific [window hint](@ref GLFW_WIN32_DXGI_SWAPCHAIN_FALLBACK_hint).
+ */
+#define GLFW_WIN32_DXGI_SWAPCHAIN_FALLBACK 0x00025003
+/*! @brief Win32 specific [window hint](@ref GLFW_WIN32_DXGI_SWAPCHAIN_FORCE_hint).
+ */
+#define GLFW_WIN32_DXGI_SWAPCHAIN_FORCE 0x00025004
 /*! @brief Wayland specific
  *  [window hint](@ref GLFW_WAYLAND_APP_ID_hint).
- *  
+ *
  *  Allows specification of the Wayland app_id.
  */
 #define GLFW_WAYLAND_APP_ID         0x00026001
@@ -3827,6 +3833,7 @@ GLFWAPI float glfwGetWindowMaxLuminance(GLFWwindow* window);
 
 GLFWAPI uint32_t glfwGetWindowPrimaries(GLFWwindow* window);
 GLFWAPI uint32_t glfwGetWindowTransfer(GLFWwindow* window);
+GLFWAPI uint32_t glfwGetWindowSwapchainImageTexture(GLFWwindow* window);
 
 /*! @brief Returns the opacity of the whole window.
  *
@@ -5575,11 +5582,11 @@ GLFWAPI GLFWimestatusfun glfwSetIMEStatusCallback(GLFWwindow* window, GLFWimesta
  *
  *  By default, this callback is not called because the IME displays the
  *  candidates and there is nothing to do on the application side.  Only when
- *  the application side needs to use this to manage the displaying of 
+ *  the application side needs to use this to manage the displaying of
  *  IME candidates, you can set
  *  [GLFW_MANAGE_PREEDIT_CANDIDATE](@ref GLFW_MANAGE_PREEDIT_CANDIDATE_hint) init hint
  *  and stop the IME from managing it.
- * 
+ *
  *  @param[in] window The window whose callback to set.
  *  @param[in] cbfun The new callback, or `NULL` to remove the currently set
  *  callback.
@@ -6879,4 +6886,3 @@ GLFWAPI VkResult glfwCreateWindowSurface(VkInstance instance, GLFWwindow* window
 #endif
 
 #endif /* _glfw3_h_ */
-

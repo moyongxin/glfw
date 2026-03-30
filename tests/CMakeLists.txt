@@ -42,6 +42,11 @@ add_executable(title WIN32 MACOSX_BUNDLE title.c ${GLAD_GL})
 add_executable(triangle-vulkan WIN32 triangle-vulkan.c ${GLAD_VULKAN})
 add_executable(window WIN32 MACOSX_BUNDLE window.c ${GLAD_GL})
 
+if (GLFW_BUILD_WIN32)
+    add_executable(dxgi-fallback WIN32 dxgi_fallback.c ${GLAD_GL})
+    set(DXGI_FALLBACK_BINARIES dxgi-fallback)
+endif()
+
 target_link_libraries(empty Threads::Threads)
 target_link_libraries(threads Threads::Threads)
 if (RT_LIBRARY)
@@ -54,7 +59,7 @@ if (GLFW_BUILD_X11 OR GLFW_BUILD_WAYLAND)
 endif()
 
 set(GUI_ONLY_BINARIES empty gamma icon input_text inputlag joysticks tearing threads
-    timeout title triangle-vulkan window)
+    timeout title triangle-vulkan window ${DXGI_FALLBACK_BINARIES})
 set(CONSOLE_BINARIES allocator clipboard events msaa glfwinfo iconify monitors
     reopen cursor)
 
@@ -89,4 +94,3 @@ if (APPLE)
                           MACOSX_BUNDLE_LONG_VERSION_STRING ${GLFW_VERSION}
                           MACOSX_BUNDLE_INFO_PLIST "${GLFW_SOURCE_DIR}/CMake/Info.plist.in")
 endif()
-

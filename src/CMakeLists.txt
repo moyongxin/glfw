@@ -41,7 +41,7 @@ if (GLFW_BUILD_WIN32)
     target_compile_definitions(glfw PRIVATE _GLFW_WIN32)
     target_sources(glfw PRIVATE win32_platform.h win32_joystick.h win32_init.c
                                 win32_joystick.c win32_monitor.c win32_window.c
-                                wgl_context.c)
+                                wgl_context.c dxgi_context.c)
 endif()
 
 if (GLFW_BUILD_X11)
@@ -150,7 +150,10 @@ target_include_directories(glfw PRIVATE
 target_link_libraries(glfw PRIVATE Threads::Threads)
 
 if (GLFW_BUILD_WIN32)
+    target_link_libraries(glfw PRIVATE d3d11 dxgi)
     list(APPEND glfw_PKG_LIBS "-lgdi32")
+    list(APPEND glfw_PKG_LIBS "-ldxgi")
+    list(APPEND glfw_PKG_LIBS "-ld3d11")
 endif()
 
 if (GLFW_BUILD_COCOA)
@@ -353,4 +356,3 @@ if (GLFW_INSTALL)
             ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
             LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 endif()
-
