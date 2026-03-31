@@ -664,45 +664,26 @@ static GLFWbool recreateDXGIFallbackResources(_GLFWwindow *window) {
     return GLFW_TRUE;
 }
 
-static GLFWbool handleDXGIDeviceLoss(_GLFWwindow *window, const char *operation,
-                                     HRESULT hr) {
+static GLFWbool handleDXGIError(_GLFWwindow *window, const char *operation,
+                                HRESULT hr) {
     ID3D11Device *device;
-    HRESULT reason;
+    HRESULT fatalReason = hr;
 
-    if (isDXGIDeviceLostError(hr)) {
-        if (recreateDXGIFallbackResources(window)) {
-            _glfwInputError(GLFW_PLATFORM_ERROR,
-                            "Win32: DXGI %s failed (0x%08lX), "
-                            "recreated fallback resources",
-                            operation, (unsigned long)hr);
-            return GLFW_TRUE;
-        }
+    if (!isDXGIDeviceLostError(hr)) {
+        device = (ID3D11Device *)window->win32.dxgi.device;
+        if (!device)
+            return GLFW_FALSE;
 
-        disableDXGIFallbackWin32(window, operation, hr);
-        return GLFW_TRUE;
+        fatalReason = ID3D11Device_GetDeviceRemovedReason(device);
+        if (!FAILED(fatalReason))
+            return GLFW_FALSE;
     }
 
-    device = (ID3D11Device *)window->win32.dxgi.device;
-    if (!device)
-        return GLFW_FALSE;
-
-    reason = ID3D11Device_GetDeviceRemovedReason(device);
-    if (FAILED(reason)) {
-        if (recreateDXGIFallbackResources(window)) {
-            _glfwInputError(GLFW_PLATFORM_ERROR,
-                            "Win32: DXGI %s failed (0x%08lX), "
-                            "recreated fallback after removed reason "
-                            "(0x%08lX)",
-                            operation, (unsigned long)hr,
-                            (unsigned long)reason);
-            return GLFW_TRUE;
-        }
-
-        disableDXGIFallbackWin32(window, operation, reason);
+    if (recreateDXGIFallbackResources(window))
         return GLFW_TRUE;
-    }
 
-    return GLFW_FALSE;
+    disableDXGIFallbackWin32(window, operation, fatalReason);
+    return GLFW_TRUE;
 }
 
 static GLFWbool getCurrentSwapchainBackBuffer(_GLFWwindow *window,
@@ -1127,7 +1108,7 @@ void _glfwResizeDXGIFallbackWin32(_GLFWwindow *window, int width, int height) {
                                        : 0);
 
     if (FAILED(hr)) {
-        if (handleDXGIDeviceLoss(window, "resize buffers", hr))
+        if (handleDXGIError(window, "resize buffers", hr))
             return;
 
         _glfwInputError(GLFW_PLATFORM_ERROR,
@@ -1139,7 +1120,7 @@ void _glfwResizeDXGIFallbackWin32(_GLFWwindow *window, int width, int height) {
         if (!createInteropSurface(
                 window, rect.right - rect.left > 0 ? rect.right - rect.left : 1,
                 rect.bottom - rect.top > 0 ? rect.bottom - rect.top : 1)) {
-            if (handleDXGIDeviceLoss(window, "resize recovery", hr))
+            if (handleDXGIError(window, "resize recovery", hr))
                 return;
 
             disableDXGIFallbackWin32(window, "resize recovery", hr);
@@ -1149,7 +1130,7 @@ void _glfwResizeDXGIFallbackWin32(_GLFWwindow *window, int width, int height) {
     }
 
     if (!createInteropSurface(window, width, height)) {
-        if (handleDXGIDeviceLoss(window, "interop surface recreation", E_FAIL))
+        if (handleDXGIError(window, "interop surface recreation", E_FAIL))
             return;
 
         disableDXGIFallbackWin32(window, "interop surface recreation", E_FAIL);
@@ -1195,7 +1176,7 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
 
     hr = renderFlipToBackBuffer(window, context, backBuffer);
     if (FAILED(hr)) {
-        if (handleDXGIDeviceLoss(window, "flip render", hr))
+        if (handleDXGIError(window, "flip render", hr))
             return;
 
         disableDXGIFallbackWin32(window, "flip render", hr);
@@ -1213,7 +1194,7 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
     if (hr == DXGI_STATUS_OCCLUDED) {
         // Window is occluded; keep fallback active and try again later.
     } else if (FAILED(hr)) {
-        if (handleDXGIDeviceLoss(window, "present", hr)) {
+        if (handleDXGIError(window, "present", hr)) {
             return;
         }
 
