@@ -82,6 +82,9 @@ static PFNWGLDXUNREGISTEROBJECTNVPROC _wglDXUnregisterObjectNV;
 static PFNWGLDXLOCKOBJECTSNVPROC _wglDXLockObjectsNV;
 static PFNWGLDXUNLOCKOBJECTSNVPROC _wglDXUnlockObjectsNV;
 
+static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
+                                     int height);
+
 static DXGI_FORMAT chooseSwapchainFormat(const _GLFWfbconfig *fbconfig) {
     if (fbconfig->floatbuffer || fbconfig->redBits >= 16 ||
         fbconfig->greenBits >= 16 || fbconfig->blueBits >= 16) {
@@ -449,11 +452,225 @@ static void disableDXGIFallbackWin32(_GLFWwindow *window, const char *operation,
     _glfwDestroyDXGIFallbackWin32(window);
 }
 
+static GLFWbool isDXGIDeviceLostError(HRESULT hr) {
+    return hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET ||
+           hr == DXGI_ERROR_DRIVER_INTERNAL_ERROR ||
+           hr == DXGI_ERROR_DEVICE_HUNG;
+}
+
+static GLFWbool recreateDXGIFallbackResources(_GLFWwindow *window) {
+    IDXGIFactory *factory = NULL;
+    IDXGIAdapter *adapter = NULL;
+    IDXGIDevice *dxgiDevice = NULL;
+    D3D_FEATURE_LEVEL featureLevel;
+    DXGI_SWAP_CHAIN_DESC desc;
+    DXGI_FORMAT format;
+    ID3D11Device *device = NULL;
+    ID3D11DeviceContext *context = NULL;
+    IDXGISwapChain *swapchain = NULL;
+    RECT rect;
+    HRESULT hr;
+    int swapInterval = window->win32.dxgiSwapInterval;
+
+    releaseInteropObject(window);
+    releaseGLTexture(window);
+    releaseD3DObjects(window);
+    releaseInteropDevice(window);
+    releaseDeviceChain(window);
+
+    window->win32.dxgiInteropActive = GLFW_FALSE;
+
+    hr = D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL,
+                           D3D11_CREATE_DEVICE_BGRA_SUPPORT, NULL, 0,
+                           D3D11_SDK_VERSION, &device, &featureLevel, &context);
+    if (FAILED(hr)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to recreate D3D11 device (0x%08lX)",
+                        (unsigned long)hr);
+        return GLFW_FALSE;
+    }
+
+    (void)featureLevel;
+
+    hr = ID3D11Device_QueryInterface(device, &IID_IDXGIDevice,
+                                     (void **)&dxgiDevice);
+    if (FAILED(hr)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to query IDXGIDevice during recovery "
+                        "(0x%08lX)",
+                        (unsigned long)hr);
+        ID3D11DeviceContext_Release(context);
+        ID3D11Device_Release(device);
+        return GLFW_FALSE;
+    }
+
+    hr = IDXGIDevice_GetAdapter(dxgiDevice, &adapter);
+    IDXGIDevice_Release(dxgiDevice);
+    if (FAILED(hr)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to get DXGI adapter during recovery "
+                        "(0x%08lX)",
+                        (unsigned long)hr);
+        ID3D11DeviceContext_Release(context);
+        ID3D11Device_Release(device);
+        return GLFW_FALSE;
+    }
+
+    hr = IDXGIAdapter_GetParent(adapter, &IID_IDXGIFactory, (void **)&factory);
+    IDXGIAdapter_Release(adapter);
+    if (FAILED(hr)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to get DXGI factory during recovery "
+                        "(0x%08lX)",
+                        (unsigned long)hr);
+        ID3D11DeviceContext_Release(context);
+        ID3D11Device_Release(device);
+        return GLFW_FALSE;
+    }
+
+    format = (DXGI_FORMAT)window->win32.dxgiSwapchainFormat;
+    if (format == DXGI_FORMAT_UNKNOWN)
+        format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    ZeroMemory(&desc, sizeof(desc));
+    desc.BufferCount = 2;
+    desc.BufferDesc.Format = format;
+    desc.BufferDesc.RefreshRate.Numerator = 0;
+    desc.BufferDesc.RefreshRate.Denominator = 1;
+    desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    desc.OutputWindow = window->win32.handle;
+    desc.SampleDesc.Count = 1;
+    desc.Windowed = TRUE;
+    desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+
+    hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &desc,
+                                      &swapchain);
+    if (FAILED(hr) && (desc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING)) {
+        desc.Flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+        hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &desc,
+                                          &swapchain);
+    }
+
+    IDXGIFactory_Release(factory);
+    if (FAILED(hr)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to recreate DXGI swapchain (0x%08lX)",
+                        (unsigned long)hr);
+        ID3D11DeviceContext_Release(context);
+        ID3D11Device_Release(device);
+        return GLFW_FALSE;
+    }
+
+    window->win32.dxgiInteropDevice = _wglDXOpenDeviceNV(device);
+    if (!window->win32.dxgiInteropDevice) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to reopen WGL DX interop device");
+        IDXGISwapChain_Release(swapchain);
+        ID3D11DeviceContext_Release(context);
+        ID3D11Device_Release(device);
+        return GLFW_FALSE;
+    }
+
+    window->win32.dxgiDevice = device;
+    window->win32.dxgiDeviceContext = context;
+    window->win32.dxgiSwapchain = swapchain;
+    window->win32.dxgiAllowTearing =
+        (desc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0;
+    window->win32.dxgiSwapInterval = swapInterval;
+
+    assignWindowColorStateFromFormat(window, format);
+    configureSwapchainColorSpace(window, swapchain);
+
+    GetClientRect(window->win32.handle, &rect);
+    if (!createInteropSurface(
+            window, rect.right - rect.left > 0 ? rect.right - rect.left : 1,
+            rect.bottom - rect.top > 0 ? rect.bottom - rect.top : 1)) {
+        _glfwDestroyDXGIFallbackWin32(window);
+        return GLFW_FALSE;
+    }
+
+    window->win32.dxgiInteropActive = GLFW_TRUE;
+    return GLFW_TRUE;
+}
+
+static GLFWbool handleDXGIDeviceLoss(_GLFWwindow *window, const char *operation,
+                                     HRESULT hr) {
+    ID3D11Device *device;
+    HRESULT reason;
+
+    if (isDXGIDeviceLostError(hr)) {
+        if (recreateDXGIFallbackResources(window)) {
+            _glfwInputError(GLFW_PLATFORM_ERROR,
+                            "Win32: DXGI %s failed (0x%08lX), "
+                            "recreated fallback resources",
+                            operation, (unsigned long)hr);
+            return GLFW_TRUE;
+        }
+
+        disableDXGIFallbackWin32(window, operation, hr);
+        return GLFW_TRUE;
+    }
+
+    device = (ID3D11Device *)window->win32.dxgiDevice;
+    if (!device)
+        return GLFW_FALSE;
+
+    reason = ID3D11Device_GetDeviceRemovedReason(device);
+    if (FAILED(reason)) {
+        if (recreateDXGIFallbackResources(window)) {
+            _glfwInputError(GLFW_PLATFORM_ERROR,
+                            "Win32: DXGI %s failed (0x%08lX), "
+                            "recreated fallback after removed reason "
+                            "(0x%08lX)",
+                            operation, (unsigned long)hr,
+                            (unsigned long)reason);
+            return GLFW_TRUE;
+        }
+
+        disableDXGIFallbackWin32(window, operation, reason);
+        return GLFW_TRUE;
+    }
+
+    return GLFW_FALSE;
+}
+
+static GLFWbool getCurrentSwapchainBackBuffer(_GLFWwindow *window,
+                                              ID3D11Texture2D **backBuffer) {
+    if (!backBuffer || !window->win32.dxgiBackBuffer)
+        return GLFW_FALSE;
+
+    *backBuffer = (ID3D11Texture2D *)window->win32.dxgiBackBuffer;
+
+    return GLFW_TRUE;
+}
+
+static GLFWbool cacheSwapchainBackBuffers(_GLFWwindow *window) {
+    IDXGISwapChain *swapchain = (IDXGISwapChain *)window->win32.dxgiSwapchain;
+    ID3D11Texture2D *buffer = NULL;
+    HRESULT hr;
+
+    if (!swapchain)
+        return GLFW_FALSE;
+
+    // We use FLIP_DISCARD swapchains, just get the first back buffer
+    hr = IDXGISwapChain_GetBuffer(swapchain, 0, &IID_ID3D11Texture2D,
+                                  (void **)&buffer);
+    if (FAILED(hr)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to get DXGI back buffer 0 (0x%08lX)",
+                        (unsigned long)hr);
+        return GLFW_FALSE;
+    }
+
+    window->win32.dxgiBackBuffer = buffer;
+    return GLFW_TRUE;
+}
+
 static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
                                      int height) {
     ID3D11Device *device = (ID3D11Device *)window->win32.dxgiDevice;
     ID3D11Texture2D *shared = NULL;
-    ID3D11Texture2D *backBuffer = NULL;
     IDXGIResource *sharedResource = NULL;
     D3D11_TEXTURE2D_DESC desc;
     HANDLE interopObject = NULL;
@@ -469,14 +686,8 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
     releaseGLTexture(window);
     releaseD3DObjects(window);
 
-    hr =
-        IDXGISwapChain_GetBuffer((IDXGISwapChain *)window->win32.dxgiSwapchain,
-                                 0, &IID_ID3D11Texture2D, (void **)&backBuffer);
-    if (FAILED(hr)) {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to get DXGI back buffer");
+    if (!cacheSwapchainBackBuffers(window))
         return GLFW_FALSE;
-    }
 
     ZeroMemory(&desc, sizeof(desc));
     desc.Width = (UINT)width;
@@ -493,7 +704,6 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
     if (FAILED(hr)) {
         _glfwInputError(GLFW_PLATFORM_ERROR,
                         "Win32: Failed to create DXGI interop texture");
-        ID3D11Texture2D_Release(backBuffer);
         return GLFW_FALSE;
     }
 
@@ -503,7 +713,6 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
         _glfwInputError(GLFW_PLATFORM_ERROR,
                         "Win32: Failed to query shared texture handle");
         ID3D11Texture2D_Release(shared);
-        ID3D11Texture2D_Release(backBuffer);
         return GLFW_FALSE;
     }
 
@@ -513,7 +722,6 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
         _glfwInputError(GLFW_PLATFORM_ERROR,
                         "Win32: Failed to get shared texture handle");
         ID3D11Texture2D_Release(shared);
-        ID3D11Texture2D_Release(backBuffer);
         return GLFW_FALSE;
     }
 
@@ -530,7 +738,6 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
             GLFW_PLATFORM_ERROR,
             "Win32: Failed to retrieve required OpenGL texture entry points");
         ID3D11Texture2D_Release(shared);
-        ID3D11Texture2D_Release(backBuffer);
         return GLFW_FALSE;
     }
 
@@ -553,7 +760,6 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
             GLFW_API_UNAVAILABLE,
             "Win32: Failed to register DXGI texture for WGL interop");
         ID3D11Texture2D_Release(shared);
-        ID3D11Texture2D_Release(backBuffer);
         return GLFW_FALSE;
     }
 
@@ -573,13 +779,11 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
         _glfwInputError(GLFW_API_UNAVAILABLE,
                         "Win32: Failed to lock WGL DX interop object");
         ID3D11Texture2D_Release(shared);
-        ID3D11Texture2D_Release(backBuffer);
         return GLFW_FALSE;
     }
 
     restorePreviousContext(previous, window);
 
-    window->win32.dxgiBackBuffer = backBuffer;
     window->win32.dxgiInteropTexture = shared;
     window->win32.dxgiInteropObject = interopObject;
     window->win32.dxgiSwapchainImageTexture = texture;
@@ -591,18 +795,8 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
 GLFWbool _glfwCreateDXGIFallbackWin32(_GLFWwindow *window,
                                       const _GLFWctxconfig *ctxconfig,
                                       const _GLFWfbconfig *fbconfig) {
-    IDXGIFactory *factory = NULL;
-    IDXGIAdapter *adapter = NULL;
-    IDXGIDevice *dxgiDevice = NULL;
-    D3D_FEATURE_LEVEL featureLevel;
-    DXGI_SWAP_CHAIN_DESC desc;
     DXGI_FORMAT swapchainFormat;
-    ID3D11Device *device = NULL;
-    ID3D11DeviceContext *context = NULL;
-    IDXGISwapChain *swapchain = NULL;
-    RECT rect;
     _GLFWwindow *previous;
-    HRESULT hr;
 
     window->win32.dxgiInteropActive = GLFW_FALSE;
     window->win32.dxgiSwapchainImageTexture = 0;
@@ -611,6 +805,7 @@ GLFWbool _glfwCreateDXGIFallbackWin32(_GLFWwindow *window,
     window->win32.dxgiUsesHelperContext = GLFW_FALSE;
     window->win32.dxgiWglDC = NULL;
     window->win32.dxgiWglRC = NULL;
+    window->win32.dxgiBackBuffer = NULL;
     window->win32.dxgiSwapchainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     window->win32.dxgiColorPrimaries = 1;
     window->win32.dxgiColorTransfer = 10;
@@ -652,116 +847,11 @@ GLFWbool _glfwCreateDXGIFallbackWin32(_GLFWwindow *window,
 
     restorePreviousContext(previous, window);
 
-    hr = D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL,
-                           D3D11_CREATE_DEVICE_BGRA_SUPPORT, NULL, 0,
-                           D3D11_SDK_VERSION, &device, &featureLevel, &context);
-    if (FAILED(hr)) {
-        _glfwInputError(GLFW_API_UNAVAILABLE,
-                        "Win32: Failed to create D3D11 device");
+    if (!recreateDXGIFallbackResources(window)) {
         destroyContextDXGIWGL(window);
         return GLFW_FALSE;
     }
 
-    (void)featureLevel;
-
-    hr = ID3D11Device_QueryInterface(device, &IID_IDXGIDevice,
-                                     (void **)&dxgiDevice);
-    if (FAILED(hr)) {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to query IDXGIDevice");
-        ID3D11DeviceContext_Release(context);
-        ID3D11Device_Release(device);
-        destroyContextDXGIWGL(window);
-        return GLFW_FALSE;
-    }
-
-    hr = IDXGIDevice_GetAdapter(dxgiDevice, &adapter);
-    IDXGIDevice_Release(dxgiDevice);
-    if (FAILED(hr)) {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to get DXGI adapter");
-        ID3D11DeviceContext_Release(context);
-        ID3D11Device_Release(device);
-        destroyContextDXGIWGL(window);
-        return GLFW_FALSE;
-    }
-
-    hr = IDXGIAdapter_GetParent(adapter, &IID_IDXGIFactory, (void **)&factory);
-    IDXGIAdapter_Release(adapter);
-    if (FAILED(hr)) {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to get DXGI factory");
-        ID3D11DeviceContext_Release(context);
-        ID3D11Device_Release(device);
-        destroyContextDXGIWGL(window);
-        return GLFW_FALSE;
-    }
-
-    ZeroMemory(&desc, sizeof(desc));
-    desc.BufferCount = 2;
-    desc.BufferDesc.Format = swapchainFormat;
-    desc.BufferDesc.RefreshRate.Numerator = 0;
-    desc.BufferDesc.RefreshRate.Denominator = 1;
-    desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    desc.OutputWindow = window->win32.handle;
-    desc.SampleDesc.Count = 1;
-    desc.Windowed = TRUE;
-    desc.SwapEffect = IsWindows8OrGreater() ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL
-                                            : DXGI_SWAP_EFFECT_DISCARD;
-    desc.Flags = 0;
-
-    if (_glfwIsWindows10Version1703OrGreaterWin32() &&
-        desc.SwapEffect != DXGI_SWAP_EFFECT_DISCARD) {
-        desc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-    }
-
-    hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &desc,
-                                      &swapchain);
-    if (FAILED(hr) && (desc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING)) {
-        desc.Flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-        hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &desc,
-                                          &swapchain);
-    }
-
-    IDXGIFactory_Release(factory);
-    if (FAILED(hr)) {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to create DXGI swapchain");
-        ID3D11DeviceContext_Release(context);
-        ID3D11Device_Release(device);
-        destroyContextDXGIWGL(window);
-        return GLFW_FALSE;
-    }
-
-    window->win32.dxgiInteropDevice = _wglDXOpenDeviceNV(device);
-    if (!window->win32.dxgiInteropDevice) {
-        _glfwInputError(GLFW_API_UNAVAILABLE,
-                        "Win32: Failed to open WGL DX interop device");
-        IDXGISwapChain_Release(swapchain);
-        ID3D11DeviceContext_Release(context);
-        ID3D11Device_Release(device);
-        destroyContextDXGIWGL(window);
-        return GLFW_FALSE;
-    }
-
-    window->win32.dxgiDevice = device;
-    window->win32.dxgiDeviceContext = context;
-    window->win32.dxgiSwapchain = swapchain;
-    window->win32.dxgiSwapInterval = 1;
-    window->win32.dxgiAllowTearing =
-        (desc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0;
-
-    configureSwapchainColorSpace(window, swapchain);
-
-    GetClientRect(window->win32.handle, &rect);
-    if (!createInteropSurface(
-            window, rect.right - rect.left > 0 ? rect.right - rect.left : 1,
-            rect.bottom - rect.top > 0 ? rect.bottom - rect.top : 1)) {
-        _glfwDestroyDXGIFallbackWin32(window);
-        return GLFW_FALSE;
-    }
-
-    window->win32.dxgiInteropActive = GLFW_TRUE;
     return GLFW_TRUE;
 }
 
@@ -805,7 +895,11 @@ void _glfwResizeDXGIFallbackWin32(_GLFWwindow *window, int width, int height) {
         (UINT)height, DXGI_FORMAT_UNKNOWN,
         window->win32.dxgiAllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
                                        : 0);
+
     if (FAILED(hr)) {
+        if (handleDXGIDeviceLoss(window, "resize buffers", hr))
+            return;
+
         _glfwInputError(GLFW_PLATFORM_ERROR,
                         "Win32: Failed to resize DXGI swapchain buffers "
                         "(0x%08lX), attempting to restore interop surface",
@@ -815,6 +909,9 @@ void _glfwResizeDXGIFallbackWin32(_GLFWwindow *window, int width, int height) {
         if (!createInteropSurface(
                 window, rect.right - rect.left > 0 ? rect.right - rect.left : 1,
                 rect.bottom - rect.top > 0 ? rect.bottom - rect.top : 1)) {
+            if (handleDXGIDeviceLoss(window, "resize recovery", hr))
+                return;
+
             disableDXGIFallbackWin32(window, "resize recovery", hr);
         }
 
@@ -822,6 +919,9 @@ void _glfwResizeDXGIFallbackWin32(_GLFWwindow *window, int width, int height) {
     }
 
     if (!createInteropSurface(window, width, height)) {
+        if (handleDXGIDeviceLoss(window, "interop surface recreation", E_FAIL))
+            return;
+
         disableDXGIFallbackWin32(window, "interop surface recreation", E_FAIL);
         return;
     }
@@ -845,19 +945,24 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
         return;
 
     context = (ID3D11DeviceContext *)window->win32.dxgiDeviceContext;
-    backBuffer = (ID3D11Texture2D *)window->win32.dxgiBackBuffer;
+    backBuffer = NULL;
     sharedTexture = (ID3D11Texture2D *)window->win32.dxgiInteropTexture;
     swapchain = (IDXGISwapChain *)window->win32.dxgiSwapchain;
     interopDevice = (HANDLE)window->win32.dxgiInteropDevice;
     interopObject = (HANDLE)window->win32.dxgiInteropObject;
 
-    if (!context || !backBuffer || !sharedTexture || !swapchain ||
-        !interopDevice || !interopObject) {
+    if (!context || !sharedTexture || !swapchain || !interopDevice ||
+        !interopObject) {
         return;
     }
 
     if (!_wglDXUnlockObjectsNV(interopDevice, 1, &interopObject)) {
         disableDXGIFallbackWin32(window, "unlock interop object", E_FAIL);
+        return;
+    }
+
+    if (!getCurrentSwapchainBackBuffer(window, &backBuffer)) {
+        disableDXGIFallbackWin32(window, "acquire back buffer", E_FAIL);
         return;
     }
 
@@ -875,9 +980,7 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
     if (hr == DXGI_STATUS_OCCLUDED) {
         // Window is occluded; keep fallback active and try again later.
     } else if (FAILED(hr)) {
-        if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET ||
-            hr == DXGI_ERROR_DRIVER_INTERNAL_ERROR) {
-            disableDXGIFallbackWin32(window, "present", hr);
+        if (handleDXGIDeviceLoss(window, "present", hr)) {
             return;
         }
 
@@ -886,8 +989,10 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
                         (unsigned long)hr);
     }
 
-    if (!_wglDXLockObjectsNV(interopDevice, 1, &interopObject))
+    if (!_wglDXLockObjectsNV(interopDevice, 1, &interopObject)) {
         disableDXGIFallbackWin32(window, "lock interop object", E_FAIL);
+        return;
+    }
 }
 
 uint32_t _glfwGetWindowSwapchainImageTextureWin32(_GLFWwindow *window) {
