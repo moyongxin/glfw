@@ -837,7 +837,6 @@ static HRESULT renderFlipToBackBuffer(_GLFWwindow *window,
         (ID3D11RenderTargetView *)window->win32.dxgi.flipRenderTargetView;
     D3D11_TEXTURE2D_DESC backBufferDesc;
     D3D11_VIEWPORT viewport;
-    ID3D11ShaderResourceView *nullSrv = NULL;
 
     if (!context || !backBuffer || !vs || !ps || !sampler || !srv || !rtv)
         return E_FAIL;
@@ -862,7 +861,6 @@ static HRESULT renderFlipToBackBuffer(_GLFWwindow *window,
     ID3D11DeviceContext_PSSetShaderResources(context, 0, 1, &srv);
     ID3D11DeviceContext_Draw(context, 3, 0);
 
-    ID3D11DeviceContext_PSSetShaderResources(context, 0, 1, &nullSrv);
     return S_OK;
 }
 
