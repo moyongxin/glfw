@@ -395,7 +395,6 @@ typedef struct _GLFWDXGIFallbackWin32
     void*               interopTexture;
     void*               flipVertexShader;
     void*               flipPixelShader;
-    void*               flipSamplerState;
     void*               flipShaderResourceView;
     void*               flipRenderTargetView;
     void*               interopDevice;

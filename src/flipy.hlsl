@@ -15,10 +15,15 @@ VSOut mainVS(uint vertexID : SV_VertexID)
 }
 
 Texture2D sourceTexture : register(t0);
-SamplerState sourceSampler : register(s0);
+SamplerState pointSampler {
+    Filter = MIN_MAG_MIP_POINT;
+    AddressU = Clamp;
+    AddressV = Clamp;
+    AddressW = Clamp;
+};
 
 // fxc.exe /T ps_5_0 /E mainPS /Fh flipy.ps.h /Vn _glfwDxgiFlipYPS flipy.hlsl
 float4 mainPS(VSOut input) : SV_Target
 {
-    return sourceTexture.Sample(sourceSampler, input.uv);
+    return sourceTexture.SampleLevel(pointSampler, input.uv, 0.0);
 }
