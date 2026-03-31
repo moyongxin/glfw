@@ -408,6 +408,11 @@ typedef struct _GLFWwindowWin32
     void*               dxgiSwapchain;
     void*               dxgiBackBuffer;
     void*               dxgiInteropTexture;
+    void*               dxgiFlipVertexShader;
+    void*               dxgiFlipPixelShader;
+    void*               dxgiFlipSamplerState;
+    void*               dxgiFlipShaderResourceView;
+    void*               dxgiFlipRenderTargetView;
     void*               dxgiInteropDevice;
     void*               dxgiInteropObject;
     uint32_t            dxgiSwapchainFormat;

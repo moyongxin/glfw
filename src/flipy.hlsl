@@ -1,0 +1,24 @@
+struct VSOut
+{
+    float4 position : SV_POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+// fxc.exe /T vs_5_0 /E mainVS /Fh flipy.vs.h /Vn _glfwDxgiFlipYVS flipy.hlsl
+VSOut mainVS(uint vertexID : SV_VertexID)
+{
+    VSOut o;
+    float2 uv = float2((vertexID << 1) & 2, vertexID & 2);
+    o.position = float4(uv * float2(2.0, -2.0) + float2(-1.0, 1.0), 0.0, 1.0);
+    o.uv = float2(uv.x, 1.0 - uv.y);
+    return o;
+}
+
+Texture2D sourceTexture : register(t0);
+SamplerState sourceSampler : register(s0);
+
+// fxc.exe /T ps_5_0 /E mainPS /Fh flipy.ps.h /Vn _glfwDxgiFlipYPS flipy.hlsl
+float4 mainPS(VSOut input) : SV_Target
+{
+    return sourceTexture.Sample(sourceSampler, input.uv);
+}

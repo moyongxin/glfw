@@ -34,6 +34,24 @@
 #include <dxgi.h>
 #include <dxgi1_4.h>
 #include <stddef.h>
+#include "flipy.vs.h"
+#include "flipy.ps.h"
+
+#ifndef GLFW_DXGI_FLIPY_VS_DATA
+#define GLFW_DXGI_FLIPY_VS_DATA _glfwDxgiFlipYVS
+#endif
+
+#ifndef GLFW_DXGI_FLIPY_VS_SIZE
+#define GLFW_DXGI_FLIPY_VS_SIZE sizeof(_glfwDxgiFlipYVS)
+#endif
+
+#ifndef GLFW_DXGI_FLIPY_PS_DATA
+#define GLFW_DXGI_FLIPY_PS_DATA _glfwDxgiFlipYPS
+#endif
+
+#ifndef GLFW_DXGI_FLIPY_PS_SIZE
+#define GLFW_DXGI_FLIPY_PS_SIZE sizeof(_glfwDxgiFlipYPS)
+#endif
 
 #ifndef GL_TEXTURE_2D
 #define GL_TEXTURE_2D 0x0DE1
@@ -84,6 +102,12 @@ static PFNWGLDXUNLOCKOBJECTSNVPROC _wglDXUnlockObjectsNV;
 
 static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
                                      int height);
+static GLFWbool createFlipPipeline(_GLFWwindow *window);
+static GLFWbool createFlipViews(_GLFWwindow *window);
+static HRESULT renderFlipToBackBuffer(_GLFWwindow *window,
+                                      ID3D11DeviceContext *context,
+                                      ID3D11Texture2D *backBuffer);
+static void releaseFlipPipeline(_GLFWwindow *window);
 
 static DXGI_FORMAT chooseSwapchainFormat(const _GLFWfbconfig *fbconfig) {
     if (fbconfig->floatbuffer || fbconfig->redBits >= 16 ||
@@ -391,6 +415,18 @@ static void releaseGLTexture(_GLFWwindow *window) {
 }
 
 static void releaseD3DObjects(_GLFWwindow *window) {
+    if (window->win32.dxgiFlipShaderResourceView) {
+        ID3D11ShaderResourceView_Release(
+            (ID3D11ShaderResourceView *)window->win32.dxgiFlipShaderResourceView);
+        window->win32.dxgiFlipShaderResourceView = NULL;
+    }
+
+    if (window->win32.dxgiFlipRenderTargetView) {
+        ID3D11RenderTargetView_Release(
+            (ID3D11RenderTargetView *)window->win32.dxgiFlipRenderTargetView);
+        window->win32.dxgiFlipRenderTargetView = NULL;
+    }
+
     if (window->win32.dxgiInteropTexture) {
         ID3D11Texture2D_Release(
             (ID3D11Texture2D *)window->win32.dxgiInteropTexture);
@@ -404,7 +440,29 @@ static void releaseD3DObjects(_GLFWwindow *window) {
     }
 }
 
+static void releaseFlipPipeline(_GLFWwindow *window) {
+    if (window->win32.dxgiFlipSamplerState) {
+        ID3D11SamplerState_Release(
+            (ID3D11SamplerState *)window->win32.dxgiFlipSamplerState);
+        window->win32.dxgiFlipSamplerState = NULL;
+    }
+
+    if (window->win32.dxgiFlipPixelShader) {
+        ID3D11PixelShader_Release(
+            (ID3D11PixelShader *)window->win32.dxgiFlipPixelShader);
+        window->win32.dxgiFlipPixelShader = NULL;
+    }
+
+    if (window->win32.dxgiFlipVertexShader) {
+        ID3D11VertexShader_Release(
+            (ID3D11VertexShader *)window->win32.dxgiFlipVertexShader);
+        window->win32.dxgiFlipVertexShader = NULL;
+    }
+}
+
 static void releaseDeviceChain(_GLFWwindow *window) {
+    releaseFlipPipeline(window);
+
     if (window->win32.dxgiSwapchain) {
         IDXGISwapChain_Release((IDXGISwapChain *)window->win32.dxgiSwapchain);
         window->win32.dxgiSwapchain = NULL;
@@ -587,6 +645,13 @@ static GLFWbool recreateDXGIFallbackResources(_GLFWwindow *window) {
     assignWindowColorStateFromFormat(window, format);
     configureSwapchainColorSpace(window, swapchain);
 
+    if (!createFlipPipeline(window)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to create DXGI flip shader pipeline");
+        _glfwDestroyDXGIFallbackWin32(window);
+        return GLFW_FALSE;
+    }
+
     GetClientRect(window->win32.handle, &rect);
     if (!createInteropSurface(
             window, rect.right - rect.left > 0 ? rect.right - rect.left : 1,
@@ -670,6 +735,154 @@ static GLFWbool cacheSwapchainBackBuffers(_GLFWwindow *window) {
 
     window->win32.dxgiBackBuffer = buffer;
     return GLFW_TRUE;
+}
+
+static GLFWbool createFlipPipeline(_GLFWwindow *window) {
+    ID3D11Device *device = (ID3D11Device *)window->win32.dxgiDevice;
+    ID3D11VertexShader *vs = NULL;
+    ID3D11PixelShader *ps = NULL;
+    ID3D11SamplerState *sampler = NULL;
+    D3D11_SAMPLER_DESC samplerDesc;
+    HRESULT hr;
+
+    if (!device)
+        return GLFW_FALSE;
+
+    hr = ID3D11Device_CreateVertexShader(
+        device, GLFW_DXGI_FLIPY_VS_DATA, GLFW_DXGI_FLIPY_VS_SIZE, NULL, &vs);
+    if (FAILED(hr)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to create DXGI flip vertex shader "
+                        "(0x%08lX)",
+                        (unsigned long)hr);
+        return GLFW_FALSE;
+    }
+
+    hr = ID3D11Device_CreatePixelShader(
+        device, GLFW_DXGI_FLIPY_PS_DATA, GLFW_DXGI_FLIPY_PS_SIZE, NULL, &ps);
+    if (FAILED(hr)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to create DXGI flip pixel shader "
+                        "(0x%08lX)",
+                        (unsigned long)hr);
+        ID3D11VertexShader_Release(vs);
+        return GLFW_FALSE;
+    }
+
+    ZeroMemory(&samplerDesc, sizeof(samplerDesc));
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    hr = ID3D11Device_CreateSamplerState(device, &samplerDesc, &sampler);
+    if (FAILED(hr)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to create DXGI flip sampler state "
+                        "(0x%08lX)",
+                        (unsigned long)hr);
+        ID3D11PixelShader_Release(ps);
+        ID3D11VertexShader_Release(vs);
+        return GLFW_FALSE;
+    }
+
+    window->win32.dxgiFlipVertexShader = vs;
+    window->win32.dxgiFlipPixelShader = ps;
+    window->win32.dxgiFlipSamplerState = sampler;
+
+    return GLFW_TRUE;
+}
+
+static GLFWbool createFlipViews(_GLFWwindow *window) {
+    ID3D11Device *device = (ID3D11Device *)window->win32.dxgiDevice;
+    ID3D11Texture2D *shared = (ID3D11Texture2D *)window->win32.dxgiInteropTexture;
+    ID3D11Texture2D *backBuffer = (ID3D11Texture2D *)window->win32.dxgiBackBuffer;
+    ID3D11ShaderResourceView *srv = NULL;
+    ID3D11RenderTargetView *rtv = NULL;
+    HRESULT hr;
+
+    if (window->win32.dxgiFlipShaderResourceView) {
+        ID3D11ShaderResourceView_Release(
+            (ID3D11ShaderResourceView *)window->win32.dxgiFlipShaderResourceView);
+        window->win32.dxgiFlipShaderResourceView = NULL;
+    }
+
+    if (window->win32.dxgiFlipRenderTargetView) {
+        ID3D11RenderTargetView_Release(
+            (ID3D11RenderTargetView *)window->win32.dxgiFlipRenderTargetView);
+        window->win32.dxgiFlipRenderTargetView = NULL;
+    }
+
+    if (!device || !shared || !backBuffer)
+        return GLFW_FALSE;
+
+    hr = ID3D11Device_CreateShaderResourceView(device, (ID3D11Resource *)shared,
+                                               NULL, &srv);
+    if (FAILED(hr)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to create DXGI flip SRV (0x%08lX)",
+                        (unsigned long)hr);
+        return GLFW_FALSE;
+    }
+
+    hr = ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource *)backBuffer,
+                                             NULL, &rtv);
+    if (FAILED(hr)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to create DXGI flip RTV (0x%08lX)",
+                        (unsigned long)hr);
+        ID3D11ShaderResourceView_Release(srv);
+        return GLFW_FALSE;
+    }
+
+    window->win32.dxgiFlipShaderResourceView = srv;
+    window->win32.dxgiFlipRenderTargetView = rtv;
+    return GLFW_TRUE;
+}
+
+static HRESULT renderFlipToBackBuffer(_GLFWwindow *window,
+                                      ID3D11DeviceContext *context,
+                                      ID3D11Texture2D *backBuffer) {
+    ID3D11VertexShader *vs =
+        (ID3D11VertexShader *)window->win32.dxgiFlipVertexShader;
+    ID3D11PixelShader *ps =
+        (ID3D11PixelShader *)window->win32.dxgiFlipPixelShader;
+    ID3D11SamplerState *sampler =
+        (ID3D11SamplerState *)window->win32.dxgiFlipSamplerState;
+    ID3D11ShaderResourceView *srv =
+        (ID3D11ShaderResourceView *)window->win32.dxgiFlipShaderResourceView;
+    ID3D11RenderTargetView *rtv =
+        (ID3D11RenderTargetView *)window->win32.dxgiFlipRenderTargetView;
+    D3D11_TEXTURE2D_DESC backBufferDesc;
+    D3D11_VIEWPORT viewport;
+    ID3D11ShaderResourceView *nullSrv = NULL;
+
+    if (!context || !backBuffer || !vs || !ps || !sampler || !srv || !rtv)
+        return E_FAIL;
+
+    ID3D11Texture2D_GetDesc(backBuffer, &backBufferDesc);
+
+    viewport.TopLeftX = 0.0f;
+    viewport.TopLeftY = 0.0f;
+    viewport.Width = (FLOAT)backBufferDesc.Width;
+    viewport.Height = (FLOAT)backBufferDesc.Height;
+    viewport.MinDepth = 0.0f;
+    viewport.MaxDepth = 1.0f;
+
+    ID3D11DeviceContext_OMSetRenderTargets(context, 1, &rtv, NULL);
+    ID3D11DeviceContext_RSSetViewports(context, 1, &viewport);
+    ID3D11DeviceContext_IASetInputLayout(context, NULL);
+    ID3D11DeviceContext_IASetPrimitiveTopology(
+        context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    ID3D11DeviceContext_VSSetShader(context, vs, NULL, 0);
+    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
+    ID3D11DeviceContext_PSSetSamplers(context, 0, 1, &sampler);
+    ID3D11DeviceContext_PSSetShaderResources(context, 0, 1, &srv);
+    ID3D11DeviceContext_Draw(context, 3, 0);
+
+    ID3D11DeviceContext_PSSetShaderResources(context, 0, 1, &nullSrv);
+    return S_OK;
 }
 
 static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
@@ -794,6 +1007,9 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
     window->win32.dxgiSwapchainImageTexture = texture;
     window->win32.dxgiSwapchainImageHandle = (uint64_t)(uintptr_t)sharedHandle;
 
+    if (!createFlipViews(window))
+        return GLFW_FALSE;
+
     return GLFW_TRUE;
 }
 
@@ -811,6 +1027,11 @@ GLFWbool _glfwCreateDXGIFallbackWin32(_GLFWwindow *window,
     window->win32.dxgiWglDC = NULL;
     window->win32.dxgiWglRC = NULL;
     window->win32.dxgiBackBuffer = NULL;
+    window->win32.dxgiFlipVertexShader = NULL;
+    window->win32.dxgiFlipPixelShader = NULL;
+    window->win32.dxgiFlipSamplerState = NULL;
+    window->win32.dxgiFlipShaderResourceView = NULL;
+    window->win32.dxgiFlipRenderTargetView = NULL;
     window->win32.dxgiSwapchainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     window->win32.dxgiColorPrimaries = 1;
     window->win32.dxgiColorTransfer = 10;
@@ -874,6 +1095,11 @@ void _glfwDestroyDXGIFallbackWin32(_GLFWwindow *window) {
     window->win32.dxgiSwapchainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     window->win32.dxgiColorPrimaries = 1;
     window->win32.dxgiColorTransfer = 10;
+    window->win32.dxgiFlipVertexShader = NULL;
+    window->win32.dxgiFlipPixelShader = NULL;
+    window->win32.dxgiFlipSamplerState = NULL;
+    window->win32.dxgiFlipShaderResourceView = NULL;
+    window->win32.dxgiFlipRenderTargetView = NULL;
 
     destroyContextDXGIWGL(window);
 }
@@ -937,7 +1163,6 @@ void _glfwResizeDXGIFallbackWin32(_GLFWwindow *window, int width, int height) {
 void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
     ID3D11DeviceContext *context;
     ID3D11Texture2D *backBuffer;
-    ID3D11Texture2D *sharedTexture;
     IDXGISwapChain *swapchain;
     HANDLE interopDevice;
     HANDLE interopObject;
@@ -950,13 +1175,11 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
 
     context = (ID3D11DeviceContext *)window->win32.dxgiDeviceContext;
     backBuffer = NULL;
-    sharedTexture = (ID3D11Texture2D *)window->win32.dxgiInteropTexture;
     swapchain = (IDXGISwapChain *)window->win32.dxgiSwapchain;
     interopDevice = (HANDLE)window->win32.dxgiInteropDevice;
     interopObject = (HANDLE)window->win32.dxgiInteropObject;
 
-    if (!context || !sharedTexture || !swapchain || !interopDevice ||
-        !interopObject) {
+    if (!context || !swapchain || !interopDevice || !interopObject) {
         return;
     }
 
@@ -970,8 +1193,14 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
         return;
     }
 
-    ID3D11DeviceContext_CopyResource(context, (ID3D11Resource *)backBuffer,
-                                     (ID3D11Resource *)sharedTexture);
+    hr = renderFlipToBackBuffer(window, context, backBuffer);
+    if (FAILED(hr)) {
+        if (handleDXGIDeviceLoss(window, "flip render", hr))
+            return;
+
+        disableDXGIFallbackWin32(window, "flip render", hr);
+        return;
+    }
 
     interval = window->win32.dxgiSwapInterval;
     if (interval < 0)
