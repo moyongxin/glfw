@@ -29,6 +29,7 @@
 
 #if defined(_GLFW_WIN32)
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 
@@ -284,8 +285,9 @@ static int choosePixelFormatWGL(_GLFWwindow* window,
     closest = _glfwChooseFBConfig(fbconfig, usableConfigs, usableCount);
     if (!closest)
     {
-        _glfwInputError(GLFW_FORMAT_UNAVAILABLE,
-                        "WGL: Failed to find a suitable pixel format");
+        // _glfwInputError(GLFW_FORMAT_UNAVAILABLE,
+        //                 "WGL: Failed to find a suitable pixel format");
+        fprintf(stderr, "WGL: Failed to find a suitable pixel format\n");
 
         _glfw_free(usableConfigs);
         return 0;
@@ -803,4 +805,3 @@ GLFWAPI HGLRC glfwGetWGLContext(GLFWwindow* handle)
 }
 
 #endif // _GLFW_WIN32
-
