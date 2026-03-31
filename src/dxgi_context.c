@@ -229,6 +229,11 @@ static void swapIntervalDXGIWGL(int interval) {
 }
 
 static int extensionSupportedDXGIWGL(const char *extension) {
+    // It is meaningless to report WGL extensions when using DXGI fallback
+    return GLFW_FALSE;
+}
+
+static int extensionSupportedWGL(const char *extension) {
     const char *extensions = NULL;
 
     if (_glfw.wgl.GetExtensionsStringARB)
@@ -836,8 +841,7 @@ GLFWbool _glfwCreateDXGIFallbackWin32(_GLFWwindow *window,
         return GLFW_FALSE;
     }
 
-    if (!window->context.extensionSupported ||
-        !window->context.extensionSupported("WGL_NV_DX_interop2")) {
+    if (!extensionSupportedWGL("WGL_NV_DX_interop2")) {
         restorePreviousContext(previous, window);
         _glfwInputError(GLFW_API_UNAVAILABLE,
                         "Win32: WGL_NV_DX_interop2 is not available");
