@@ -125,21 +125,21 @@ static DXGI_FORMAT chooseSwapchainFormat(const _GLFWfbconfig *fbconfig) {
 
 static void assignWindowColorStateFromFormat(_GLFWwindow *window,
                                              DXGI_FORMAT format) {
-    window->win32.dxgiSwapchainFormat = (uint32_t)format;
+    window->win32.dxgi.swapchainFormat = (uint32_t)format;
 
     if (format == DXGI_FORMAT_R16G16B16A16_FLOAT) { // scRGB + 16-bit float
         window->bitsPerSample = 16;
-        window->win32.dxgiColorPrimaries = 1;
+        window->win32.dxgi.colorPrimaries = 1;
         // Start with sRGB transfer until scRGB colorspace is successfully set.
-        window->win32.dxgiColorTransfer = 5;
+        window->win32.dxgi.colorTransfer = 5;
     } else if (format == DXGI_FORMAT_R10G10B10A2_UNORM) { // PQ + 10-bit UNORM
         window->bitsPerSample = 10;
-        window->win32.dxgiColorPrimaries = 9;
-        window->win32.dxgiColorTransfer = 16;
+        window->win32.dxgi.colorPrimaries = 9;
+        window->win32.dxgi.colorTransfer = 16;
     } else { // sRGB + 8-bit UNORM
         window->bitsPerSample = 8;
-        window->win32.dxgiColorPrimaries = 1;
-        window->win32.dxgiColorTransfer = 10;
+        window->win32.dxgi.colorPrimaries = 1;
+        window->win32.dxgi.colorTransfer = 10;
     }
 }
 
@@ -154,11 +154,11 @@ static void configureSwapchainColorSpace(_GLFWwindow *window,
         return;
 
     // Drive DXGI colorspace from the exposed transfer/primaries state.
-    if (window->win32.dxgiColorPrimaries == 1 &&
-        window->win32.dxgiColorTransfer == 5) {
+    if (window->win32.dxgi.colorPrimaries == 1 &&
+        window->win32.dxgi.colorTransfer == 5) {
         requested = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709; // linear scRGB
-    } else if (window->win32.dxgiColorPrimaries == 9 &&
-               window->win32.dxgiColorTransfer == 16) {
+    } else if (window->win32.dxgi.colorPrimaries == 9 &&
+               window->win32.dxgi.colorTransfer == 16) {
         requested =
             DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020; // HDR10 (PQ + BT.2020)
     } else {
@@ -181,37 +181,37 @@ static void configureSwapchainColorSpace(_GLFWwindow *window,
                 GLFW_PLATFORM_ERROR,
                 "Win32: Failed to set DXGI scRGB colorspace (0x%08lX)",
                 (unsigned long)hr);
-            window->win32.dxgiColorPrimaries = 1;
-            window->win32.dxgiColorTransfer = 10;
+            window->win32.dxgi.colorPrimaries = 1;
+            window->win32.dxgi.colorTransfer = 10;
         } else if (FAILED(hr) &&
                    requested == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020) {
             _glfwInputError(
                 GLFW_PLATFORM_ERROR,
                 "Win32: Failed to set DXGI HDR10 colorspace (0x%08lX)",
                 (unsigned long)hr);
-            window->win32.dxgiColorPrimaries = 1;
-            window->win32.dxgiColorTransfer = 10;
+            window->win32.dxgi.colorPrimaries = 1;
+            window->win32.dxgi.colorTransfer = 10;
         } else if (SUCCEEDED(hr) &&
                    requested == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709) {
-            window->win32.dxgiColorPrimaries = 1;
-            window->win32.dxgiColorTransfer = 5;
+            window->win32.dxgi.colorPrimaries = 1;
+            window->win32.dxgi.colorTransfer = 5;
         } else if (SUCCEEDED(hr) &&
                    requested == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020) {
-            window->win32.dxgiColorPrimaries = 9;
-            window->win32.dxgiColorTransfer = 16;
+            window->win32.dxgi.colorPrimaries = 9;
+            window->win32.dxgi.colorTransfer = 16;
         }
     } else if (requested == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709) {
         _glfwInputError(
             GLFW_PLATFORM_ERROR,
             "Win32: DXGI swapchain does not support scRGB colorspace");
-        window->win32.dxgiColorPrimaries = 1;
-        window->win32.dxgiColorTransfer = 10;
+        window->win32.dxgi.colorPrimaries = 1;
+        window->win32.dxgi.colorTransfer = 10;
     } else if (requested == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020) {
         _glfwInputError(
             GLFW_PLATFORM_ERROR,
             "Win32: DXGI swapchain does not support HDR10 colorspace");
-        window->win32.dxgiColorPrimaries = 1;
-        window->win32.dxgiColorTransfer = 10;
+        window->win32.dxgi.colorPrimaries = 1;
+        window->win32.dxgi.colorTransfer = 10;
     }
 
     IDXGISwapChain3_Release(swapchain3);
@@ -219,7 +219,7 @@ static void configureSwapchainColorSpace(_GLFWwindow *window,
 
 static void makeContextCurrentDXGIWGL(_GLFWwindow *window) {
     if (window) {
-        if (wglMakeCurrent(window->win32.dxgiWglDC, window->win32.dxgiWglRC))
+        if (wglMakeCurrent(window->win32.dxgi.wglDC, window->win32.dxgi.wglRC))
             _glfwPlatformSetTls(&_glfw.contextSlot, window);
         else {
             _glfwInputErrorWin32(
@@ -238,7 +238,7 @@ static void makeContextCurrentDXGIWGL(_GLFWwindow *window) {
 }
 
 static void swapBuffersDXGIWGL(_GLFWwindow *window) {
-    SwapBuffers(window->win32.dxgiWglDC);
+    SwapBuffers(window->win32.dxgi.wglDC);
 }
 
 static void swapIntervalDXGIWGL(int interval) {
@@ -246,7 +246,7 @@ static void swapIntervalDXGIWGL(int interval) {
     if (!window)
         return;
 
-    window->win32.dxgiSwapInterval = interval;
+    window->win32.dxgi.swapInterval = interval;
 
     if (_glfw.wgl.EXT_swap_control)
         wglSwapIntervalEXT(interval);
@@ -281,18 +281,18 @@ static GLFWglproc getProcAddressDXGIWGL(const char *procname) {
 }
 
 static void destroyContextDXGIWGL(_GLFWwindow *window) {
-    if (window->win32.dxgiUsesHelperContext) {
-        if (window->win32.dxgiWglRC) {
-            wglDeleteContext(window->win32.dxgiWglRC);
-            window->win32.dxgiWglRC = NULL;
+    if (window->win32.dxgi.usesHelperContext) {
+        if (window->win32.dxgi.wglRC) {
+            wglDeleteContext(window->win32.dxgi.wglRC);
+            window->win32.dxgi.wglRC = NULL;
         }
 
-        if (window->win32.dxgiWglDC) {
-            ReleaseDC(_glfw.win32.helperWindowHandle, window->win32.dxgiWglDC);
-            window->win32.dxgiWglDC = NULL;
+        if (window->win32.dxgi.wglDC) {
+            ReleaseDC(_glfw.win32.helperWindowHandle, window->win32.dxgi.wglDC);
+            window->win32.dxgi.wglDC = NULL;
         }
 
-        window->win32.dxgiUsesHelperContext = GLFW_FALSE;
+        window->win32.dxgi.usesHelperContext = GLFW_FALSE;
     }
 }
 
@@ -334,9 +334,9 @@ static GLFWbool createHelperWGLContextForDXGI(_GLFWwindow *window) {
         return GLFW_FALSE;
     }
 
-    window->win32.dxgiWglDC = dc;
-    window->win32.dxgiWglRC = rc;
-    window->win32.dxgiUsesHelperContext = GLFW_TRUE;
+    window->win32.dxgi.wglDC = dc;
+    window->win32.dxgi.wglRC = rc;
+    window->win32.dxgi.usesHelperContext = GLFW_TRUE;
 
     window->context.source = GLFW_NATIVE_CONTEXT_API;
     window->context.client = GLFW_OPENGL_API;
@@ -389,101 +389,101 @@ static GLFWbool loadInteropProcs(_GLFWwindow *window) {
 }
 
 static void releaseInteropObject(_GLFWwindow *window) {
-    HANDLE object = (HANDLE)window->win32.dxgiInteropObject;
-    HANDLE device = (HANDLE)window->win32.dxgiInteropDevice;
+    HANDLE object = (HANDLE)window->win32.dxgi.interopObject;
+    HANDLE device = (HANDLE)window->win32.dxgi.interopDevice;
 
     if (device && object) {
         _wglDXUnlockObjectsNV(device, 1, &object);
         _wglDXUnregisterObjectNV(device, object);
     }
 
-    window->win32.dxgiInteropObject = NULL;
+    window->win32.dxgi.interopObject = NULL;
 }
 
 static void releaseGLTexture(_GLFWwindow *window) {
-    if (window->win32.dxgiSwapchainImageTexture) {
+    if (window->win32.dxgi.swapchainImageTexture) {
         PFNGLDELETETEXTURESPROC DeleteTextures =
             (PFNGLDELETETEXTURESPROC)window->context.getProcAddress(
                 "glDeleteTextures");
         if (DeleteTextures) {
-            GLuint texture = window->win32.dxgiSwapchainImageTexture;
+            GLuint texture = window->win32.dxgi.swapchainImageTexture;
             DeleteTextures(1, &texture);
         }
 
-        window->win32.dxgiSwapchainImageTexture = 0;
+        window->win32.dxgi.swapchainImageTexture = 0;
     }
 }
 
 static void releaseD3DObjects(_GLFWwindow *window) {
-    if (window->win32.dxgiFlipShaderResourceView) {
+    if (window->win32.dxgi.flipShaderResourceView) {
         ID3D11ShaderResourceView_Release(
-            (ID3D11ShaderResourceView *)window->win32.dxgiFlipShaderResourceView);
-        window->win32.dxgiFlipShaderResourceView = NULL;
+            (ID3D11ShaderResourceView *)window->win32.dxgi.flipShaderResourceView);
+        window->win32.dxgi.flipShaderResourceView = NULL;
     }
 
-    if (window->win32.dxgiFlipRenderTargetView) {
+    if (window->win32.dxgi.flipRenderTargetView) {
         ID3D11RenderTargetView_Release(
-            (ID3D11RenderTargetView *)window->win32.dxgiFlipRenderTargetView);
-        window->win32.dxgiFlipRenderTargetView = NULL;
+            (ID3D11RenderTargetView *)window->win32.dxgi.flipRenderTargetView);
+        window->win32.dxgi.flipRenderTargetView = NULL;
     }
 
-    if (window->win32.dxgiInteropTexture) {
+    if (window->win32.dxgi.interopTexture) {
         ID3D11Texture2D_Release(
-            (ID3D11Texture2D *)window->win32.dxgiInteropTexture);
-        window->win32.dxgiInteropTexture = NULL;
+            (ID3D11Texture2D *)window->win32.dxgi.interopTexture);
+        window->win32.dxgi.interopTexture = NULL;
     }
 
-    if (window->win32.dxgiBackBuffer) {
+    if (window->win32.dxgi.backBuffer) {
         ID3D11Texture2D_Release(
-            (ID3D11Texture2D *)window->win32.dxgiBackBuffer);
-        window->win32.dxgiBackBuffer = NULL;
+            (ID3D11Texture2D *)window->win32.dxgi.backBuffer);
+        window->win32.dxgi.backBuffer = NULL;
     }
 }
 
 static void releaseFlipPipeline(_GLFWwindow *window) {
-    if (window->win32.dxgiFlipSamplerState) {
+    if (window->win32.dxgi.flipSamplerState) {
         ID3D11SamplerState_Release(
-            (ID3D11SamplerState *)window->win32.dxgiFlipSamplerState);
-        window->win32.dxgiFlipSamplerState = NULL;
+            (ID3D11SamplerState *)window->win32.dxgi.flipSamplerState);
+        window->win32.dxgi.flipSamplerState = NULL;
     }
 
-    if (window->win32.dxgiFlipPixelShader) {
+    if (window->win32.dxgi.flipPixelShader) {
         ID3D11PixelShader_Release(
-            (ID3D11PixelShader *)window->win32.dxgiFlipPixelShader);
-        window->win32.dxgiFlipPixelShader = NULL;
+            (ID3D11PixelShader *)window->win32.dxgi.flipPixelShader);
+        window->win32.dxgi.flipPixelShader = NULL;
     }
 
-    if (window->win32.dxgiFlipVertexShader) {
+    if (window->win32.dxgi.flipVertexShader) {
         ID3D11VertexShader_Release(
-            (ID3D11VertexShader *)window->win32.dxgiFlipVertexShader);
-        window->win32.dxgiFlipVertexShader = NULL;
+            (ID3D11VertexShader *)window->win32.dxgi.flipVertexShader);
+        window->win32.dxgi.flipVertexShader = NULL;
     }
 }
 
 static void releaseDeviceChain(_GLFWwindow *window) {
     releaseFlipPipeline(window);
 
-    if (window->win32.dxgiSwapchain) {
-        IDXGISwapChain_Release((IDXGISwapChain *)window->win32.dxgiSwapchain);
-        window->win32.dxgiSwapchain = NULL;
+    if (window->win32.dxgi.swapchain) {
+        IDXGISwapChain_Release((IDXGISwapChain *)window->win32.dxgi.swapchain);
+        window->win32.dxgi.swapchain = NULL;
     }
 
-    if (window->win32.dxgiDeviceContext) {
+    if (window->win32.dxgi.deviceContext) {
         ID3D11DeviceContext_Release(
-            (ID3D11DeviceContext *)window->win32.dxgiDeviceContext);
-        window->win32.dxgiDeviceContext = NULL;
+            (ID3D11DeviceContext *)window->win32.dxgi.deviceContext);
+        window->win32.dxgi.deviceContext = NULL;
     }
 
-    if (window->win32.dxgiDevice) {
-        ID3D11Device_Release((ID3D11Device *)window->win32.dxgiDevice);
-        window->win32.dxgiDevice = NULL;
+    if (window->win32.dxgi.device) {
+        ID3D11Device_Release((ID3D11Device *)window->win32.dxgi.device);
+        window->win32.dxgi.device = NULL;
     }
 }
 
 static void releaseInteropDevice(_GLFWwindow *window) {
-    if (window->win32.dxgiInteropDevice) {
-        _wglDXCloseDeviceNV((HANDLE)window->win32.dxgiInteropDevice);
-        window->win32.dxgiInteropDevice = NULL;
+    if (window->win32.dxgi.interopDevice) {
+        _wglDXCloseDeviceNV((HANDLE)window->win32.dxgi.interopDevice);
+        window->win32.dxgi.interopDevice = NULL;
     }
 }
 
@@ -533,7 +533,7 @@ static GLFWbool recreateDXGIFallbackResources(_GLFWwindow *window) {
     IDXGISwapChain *swapchain = NULL;
     RECT rect;
     HRESULT hr;
-    int swapInterval = window->win32.dxgiSwapInterval;
+    int swapInterval = window->win32.dxgi.swapInterval;
 
     releaseInteropObject(window);
     releaseGLTexture(window);
@@ -541,7 +541,7 @@ static GLFWbool recreateDXGIFallbackResources(_GLFWwindow *window) {
     releaseInteropDevice(window);
     releaseDeviceChain(window);
 
-    window->win32.dxgiInteropActive = GLFW_FALSE;
+    window->win32.dxgi.interopActive = GLFW_FALSE;
 
     hr = D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL,
                            D3D11_CREATE_DEVICE_BGRA_SUPPORT, NULL, 0,
@@ -591,7 +591,7 @@ static GLFWbool recreateDXGIFallbackResources(_GLFWwindow *window) {
         return GLFW_FALSE;
     }
 
-    format = (DXGI_FORMAT)window->win32.dxgiSwapchainFormat;
+    format = (DXGI_FORMAT)window->win32.dxgi.swapchainFormat;
     if (format == DXGI_FORMAT_UNKNOWN)
         format = DXGI_FORMAT_R8G8B8A8_UNORM;
 
@@ -625,8 +625,8 @@ static GLFWbool recreateDXGIFallbackResources(_GLFWwindow *window) {
         return GLFW_FALSE;
     }
 
-    window->win32.dxgiInteropDevice = _wglDXOpenDeviceNV(device);
-    if (!window->win32.dxgiInteropDevice) {
+    window->win32.dxgi.interopDevice = _wglDXOpenDeviceNV(device);
+    if (!window->win32.dxgi.interopDevice) {
         _glfwInputError(GLFW_PLATFORM_ERROR,
                         "Win32: Failed to reopen WGL DX interop device");
         IDXGISwapChain_Release(swapchain);
@@ -635,12 +635,12 @@ static GLFWbool recreateDXGIFallbackResources(_GLFWwindow *window) {
         return GLFW_FALSE;
     }
 
-    window->win32.dxgiDevice = device;
-    window->win32.dxgiDeviceContext = context;
-    window->win32.dxgiSwapchain = swapchain;
-    window->win32.dxgiAllowTearing =
+    window->win32.dxgi.device = device;
+    window->win32.dxgi.deviceContext = context;
+    window->win32.dxgi.swapchain = swapchain;
+    window->win32.dxgi.allowTearing =
         (desc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0;
-    window->win32.dxgiSwapInterval = swapInterval;
+    window->win32.dxgi.swapInterval = swapInterval;
 
     assignWindowColorStateFromFormat(window, format);
     configureSwapchainColorSpace(window, swapchain);
@@ -660,7 +660,7 @@ static GLFWbool recreateDXGIFallbackResources(_GLFWwindow *window) {
         return GLFW_FALSE;
     }
 
-    window->win32.dxgiInteropActive = GLFW_TRUE;
+    window->win32.dxgi.interopActive = GLFW_TRUE;
     return GLFW_TRUE;
 }
 
@@ -682,7 +682,7 @@ static GLFWbool handleDXGIDeviceLoss(_GLFWwindow *window, const char *operation,
         return GLFW_TRUE;
     }
 
-    device = (ID3D11Device *)window->win32.dxgiDevice;
+    device = (ID3D11Device *)window->win32.dxgi.device;
     if (!device)
         return GLFW_FALSE;
 
@@ -707,16 +707,16 @@ static GLFWbool handleDXGIDeviceLoss(_GLFWwindow *window, const char *operation,
 
 static GLFWbool getCurrentSwapchainBackBuffer(_GLFWwindow *window,
                                               ID3D11Texture2D **backBuffer) {
-    if (!backBuffer || !window->win32.dxgiBackBuffer)
+    if (!backBuffer || !window->win32.dxgi.backBuffer)
         return GLFW_FALSE;
 
-    *backBuffer = (ID3D11Texture2D *)window->win32.dxgiBackBuffer;
+    *backBuffer = (ID3D11Texture2D *)window->win32.dxgi.backBuffer;
 
     return GLFW_TRUE;
 }
 
 static GLFWbool cacheSwapchainBackBuffers(_GLFWwindow *window) {
-    IDXGISwapChain *swapchain = (IDXGISwapChain *)window->win32.dxgiSwapchain;
+    IDXGISwapChain *swapchain = (IDXGISwapChain *)window->win32.dxgi.swapchain;
     ID3D11Texture2D *buffer = NULL;
     HRESULT hr;
 
@@ -733,12 +733,12 @@ static GLFWbool cacheSwapchainBackBuffers(_GLFWwindow *window) {
         return GLFW_FALSE;
     }
 
-    window->win32.dxgiBackBuffer = buffer;
+    window->win32.dxgi.backBuffer = buffer;
     return GLFW_TRUE;
 }
 
 static GLFWbool createFlipPipeline(_GLFWwindow *window) {
-    ID3D11Device *device = (ID3D11Device *)window->win32.dxgiDevice;
+    ID3D11Device *device = (ID3D11Device *)window->win32.dxgi.device;
     ID3D11VertexShader *vs = NULL;
     ID3D11PixelShader *ps = NULL;
     ID3D11SamplerState *sampler = NULL;
@@ -787,31 +787,31 @@ static GLFWbool createFlipPipeline(_GLFWwindow *window) {
         return GLFW_FALSE;
     }
 
-    window->win32.dxgiFlipVertexShader = vs;
-    window->win32.dxgiFlipPixelShader = ps;
-    window->win32.dxgiFlipSamplerState = sampler;
+    window->win32.dxgi.flipVertexShader = vs;
+    window->win32.dxgi.flipPixelShader = ps;
+    window->win32.dxgi.flipSamplerState = sampler;
 
     return GLFW_TRUE;
 }
 
 static GLFWbool createFlipViews(_GLFWwindow *window) {
-    ID3D11Device *device = (ID3D11Device *)window->win32.dxgiDevice;
-    ID3D11Texture2D *shared = (ID3D11Texture2D *)window->win32.dxgiInteropTexture;
-    ID3D11Texture2D *backBuffer = (ID3D11Texture2D *)window->win32.dxgiBackBuffer;
+    ID3D11Device *device = (ID3D11Device *)window->win32.dxgi.device;
+    ID3D11Texture2D *shared = (ID3D11Texture2D *)window->win32.dxgi.interopTexture;
+    ID3D11Texture2D *backBuffer = (ID3D11Texture2D *)window->win32.dxgi.backBuffer;
     ID3D11ShaderResourceView *srv = NULL;
     ID3D11RenderTargetView *rtv = NULL;
     HRESULT hr;
 
-    if (window->win32.dxgiFlipShaderResourceView) {
+    if (window->win32.dxgi.flipShaderResourceView) {
         ID3D11ShaderResourceView_Release(
-            (ID3D11ShaderResourceView *)window->win32.dxgiFlipShaderResourceView);
-        window->win32.dxgiFlipShaderResourceView = NULL;
+            (ID3D11ShaderResourceView *)window->win32.dxgi.flipShaderResourceView);
+        window->win32.dxgi.flipShaderResourceView = NULL;
     }
 
-    if (window->win32.dxgiFlipRenderTargetView) {
+    if (window->win32.dxgi.flipRenderTargetView) {
         ID3D11RenderTargetView_Release(
-            (ID3D11RenderTargetView *)window->win32.dxgiFlipRenderTargetView);
-        window->win32.dxgiFlipRenderTargetView = NULL;
+            (ID3D11RenderTargetView *)window->win32.dxgi.flipRenderTargetView);
+        window->win32.dxgi.flipRenderTargetView = NULL;
     }
 
     if (!device || !shared || !backBuffer)
@@ -836,8 +836,8 @@ static GLFWbool createFlipViews(_GLFWwindow *window) {
         return GLFW_FALSE;
     }
 
-    window->win32.dxgiFlipShaderResourceView = srv;
-    window->win32.dxgiFlipRenderTargetView = rtv;
+    window->win32.dxgi.flipShaderResourceView = srv;
+    window->win32.dxgi.flipRenderTargetView = rtv;
     return GLFW_TRUE;
 }
 
@@ -845,15 +845,15 @@ static HRESULT renderFlipToBackBuffer(_GLFWwindow *window,
                                       ID3D11DeviceContext *context,
                                       ID3D11Texture2D *backBuffer) {
     ID3D11VertexShader *vs =
-        (ID3D11VertexShader *)window->win32.dxgiFlipVertexShader;
+        (ID3D11VertexShader *)window->win32.dxgi.flipVertexShader;
     ID3D11PixelShader *ps =
-        (ID3D11PixelShader *)window->win32.dxgiFlipPixelShader;
+        (ID3D11PixelShader *)window->win32.dxgi.flipPixelShader;
     ID3D11SamplerState *sampler =
-        (ID3D11SamplerState *)window->win32.dxgiFlipSamplerState;
+        (ID3D11SamplerState *)window->win32.dxgi.flipSamplerState;
     ID3D11ShaderResourceView *srv =
-        (ID3D11ShaderResourceView *)window->win32.dxgiFlipShaderResourceView;
+        (ID3D11ShaderResourceView *)window->win32.dxgi.flipShaderResourceView;
     ID3D11RenderTargetView *rtv =
-        (ID3D11RenderTargetView *)window->win32.dxgiFlipRenderTargetView;
+        (ID3D11RenderTargetView *)window->win32.dxgi.flipRenderTargetView;
     D3D11_TEXTURE2D_DESC backBufferDesc;
     D3D11_VIEWPORT viewport;
     ID3D11ShaderResourceView *nullSrv = NULL;
@@ -887,12 +887,12 @@ static HRESULT renderFlipToBackBuffer(_GLFWwindow *window,
 
 static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
                                      int height) {
-    ID3D11Device *device = (ID3D11Device *)window->win32.dxgiDevice;
+    ID3D11Device *device = (ID3D11Device *)window->win32.dxgi.device;
     ID3D11Texture2D *shared = NULL;
     IDXGIResource *sharedResource = NULL;
     D3D11_TEXTURE2D_DESC desc;
     HANDLE interopObject = NULL;
-    HANDLE interopDevice = (HANDLE)window->win32.dxgiInteropDevice;
+    HANDLE interopDevice = (HANDLE)window->win32.dxgi.interopDevice;
     PFNGLGENTEXTURESPROC GenTextures;
     PFNGLBINDTEXTUREPROC BindTexture;
     _GLFWwindow *previous;
@@ -912,7 +912,7 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
     desc.Height = (UINT)height;
     desc.MipLevels = 1;
     desc.ArraySize = 1;
-    desc.Format = (DXGI_FORMAT)window->win32.dxgiSwapchainFormat;
+    desc.Format = (DXGI_FORMAT)window->win32.dxgi.swapchainFormat;
     desc.SampleDesc.Count = 1;
     desc.Usage = D3D11_USAGE_DEFAULT;
     desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
@@ -1002,10 +1002,10 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
 
     restorePreviousContext(previous, window);
 
-    window->win32.dxgiInteropTexture = shared;
-    window->win32.dxgiInteropObject = interopObject;
-    window->win32.dxgiSwapchainImageTexture = texture;
-    window->win32.dxgiSwapchainImageHandle = (uint64_t)(uintptr_t)sharedHandle;
+    window->win32.dxgi.interopTexture = shared;
+    window->win32.dxgi.interopObject = interopObject;
+    window->win32.dxgi.swapchainImageTexture = texture;
+    window->win32.dxgi.swapchainImageHandle = (uint64_t)(uintptr_t)sharedHandle;
 
     if (!createFlipViews(window))
         return GLFW_FALSE;
@@ -1019,22 +1019,22 @@ GLFWbool _glfwCreateDXGIFallbackWin32(_GLFWwindow *window,
     DXGI_FORMAT swapchainFormat;
     _GLFWwindow *previous;
 
-    window->win32.dxgiInteropActive = GLFW_FALSE;
-    window->win32.dxgiSwapchainImageTexture = 0;
-    window->win32.dxgiSwapchainImageHandle = 0;
-    window->win32.dxgiAllowTearing = GLFW_FALSE;
-    window->win32.dxgiUsesHelperContext = GLFW_FALSE;
-    window->win32.dxgiWglDC = NULL;
-    window->win32.dxgiWglRC = NULL;
-    window->win32.dxgiBackBuffer = NULL;
-    window->win32.dxgiFlipVertexShader = NULL;
-    window->win32.dxgiFlipPixelShader = NULL;
-    window->win32.dxgiFlipSamplerState = NULL;
-    window->win32.dxgiFlipShaderResourceView = NULL;
-    window->win32.dxgiFlipRenderTargetView = NULL;
-    window->win32.dxgiSwapchainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-    window->win32.dxgiColorPrimaries = 1;
-    window->win32.dxgiColorTransfer = 10;
+    window->win32.dxgi.interopActive = GLFW_FALSE;
+    window->win32.dxgi.swapchainImageTexture = 0;
+    window->win32.dxgi.swapchainImageHandle = 0;
+    window->win32.dxgi.allowTearing = GLFW_FALSE;
+    window->win32.dxgi.usesHelperContext = GLFW_FALSE;
+    window->win32.dxgi.wglDC = NULL;
+    window->win32.dxgi.wglRC = NULL;
+    window->win32.dxgi.backBuffer = NULL;
+    window->win32.dxgi.flipVertexShader = NULL;
+    window->win32.dxgi.flipPixelShader = NULL;
+    window->win32.dxgi.flipSamplerState = NULL;
+    window->win32.dxgi.flipShaderResourceView = NULL;
+    window->win32.dxgi.flipRenderTargetView = NULL;
+    window->win32.dxgi.swapchainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    window->win32.dxgi.colorPrimaries = 1;
+    window->win32.dxgi.colorTransfer = 10;
 
     swapchainFormat = chooseSwapchainFormat(fbconfig);
     assignWindowColorStateFromFormat(window, swapchainFormat);
@@ -1087,19 +1087,19 @@ void _glfwDestroyDXGIFallbackWin32(_GLFWwindow *window) {
     releaseInteropDevice(window);
     releaseDeviceChain(window);
 
-    window->win32.dxgiInteropActive = GLFW_FALSE;
-    window->win32.dxgiSwapchainImageHandle = 0;
-    window->win32.dxgiSwapchainImageTexture = 0;
-    window->win32.dxgiSwapInterval = 1;
-    window->win32.dxgiAllowTearing = GLFW_FALSE;
-    window->win32.dxgiSwapchainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-    window->win32.dxgiColorPrimaries = 1;
-    window->win32.dxgiColorTransfer = 10;
-    window->win32.dxgiFlipVertexShader = NULL;
-    window->win32.dxgiFlipPixelShader = NULL;
-    window->win32.dxgiFlipSamplerState = NULL;
-    window->win32.dxgiFlipShaderResourceView = NULL;
-    window->win32.dxgiFlipRenderTargetView = NULL;
+    window->win32.dxgi.interopActive = GLFW_FALSE;
+    window->win32.dxgi.swapchainImageHandle = 0;
+    window->win32.dxgi.swapchainImageTexture = 0;
+    window->win32.dxgi.swapInterval = 1;
+    window->win32.dxgi.allowTearing = GLFW_FALSE;
+    window->win32.dxgi.swapchainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    window->win32.dxgi.colorPrimaries = 1;
+    window->win32.dxgi.colorTransfer = 10;
+    window->win32.dxgi.flipVertexShader = NULL;
+    window->win32.dxgi.flipPixelShader = NULL;
+    window->win32.dxgi.flipSamplerState = NULL;
+    window->win32.dxgi.flipShaderResourceView = NULL;
+    window->win32.dxgi.flipRenderTargetView = NULL;
 
     destroyContextDXGIWGL(window);
 }
@@ -1108,7 +1108,7 @@ void _glfwResizeDXGIFallbackWin32(_GLFWwindow *window, int width, int height) {
     RECT rect;
     HRESULT hr;
 
-    if (!window->win32.dxgiInteropActive || !window->win32.dxgiSwapchain)
+    if (!window->win32.dxgi.interopActive || !window->win32.dxgi.swapchain)
         return;
 
     if (width < 1)
@@ -1121,9 +1121,9 @@ void _glfwResizeDXGIFallbackWin32(_GLFWwindow *window, int width, int height) {
     releaseD3DObjects(window);
 
     hr = IDXGISwapChain_ResizeBuffers(
-        (IDXGISwapChain *)window->win32.dxgiSwapchain, 0, (UINT)width,
+        (IDXGISwapChain *)window->win32.dxgi.swapchain, 0, (UINT)width,
         (UINT)height, DXGI_FORMAT_UNKNOWN,
-        window->win32.dxgiAllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
+        window->win32.dxgi.allowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
                                        : 0);
 
     if (FAILED(hr)) {
@@ -1157,7 +1157,7 @@ void _glfwResizeDXGIFallbackWin32(_GLFWwindow *window, int width, int height) {
     }
 
     configureSwapchainColorSpace(window,
-                                 (IDXGISwapChain *)window->win32.dxgiSwapchain);
+                                 (IDXGISwapChain *)window->win32.dxgi.swapchain);
 }
 
 void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
@@ -1170,14 +1170,14 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
     int interval;
     HRESULT hr;
 
-    if (!window->win32.dxgiInteropActive)
+    if (!window->win32.dxgi.interopActive)
         return;
 
-    context = (ID3D11DeviceContext *)window->win32.dxgiDeviceContext;
+    context = (ID3D11DeviceContext *)window->win32.dxgi.deviceContext;
     backBuffer = NULL;
-    swapchain = (IDXGISwapChain *)window->win32.dxgiSwapchain;
-    interopDevice = (HANDLE)window->win32.dxgiInteropDevice;
-    interopObject = (HANDLE)window->win32.dxgiInteropObject;
+    swapchain = (IDXGISwapChain *)window->win32.dxgi.swapchain;
+    interopDevice = (HANDLE)window->win32.dxgi.interopDevice;
+    interopObject = (HANDLE)window->win32.dxgi.interopObject;
 
     if (!context || !swapchain || !interopDevice || !interopObject) {
         return;
@@ -1202,11 +1202,11 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
         return;
     }
 
-    interval = window->win32.dxgiSwapInterval;
+    interval = window->win32.dxgi.swapInterval;
     if (interval < 0)
         interval = 0;
 
-    if (interval == 0 && window->win32.dxgiAllowTearing)
+    if (interval == 0 && window->win32.dxgi.allowTearing)
         presentFlags |= DXGI_PRESENT_ALLOW_TEARING;
 
     hr = IDXGISwapChain_Present(swapchain, (UINT)interval, presentFlags);
@@ -1229,11 +1229,11 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
 }
 
 uint32_t _glfwGetWindowSwapchainImageTextureWin32(_GLFWwindow *window) {
-    return window->win32.dxgiSwapchainImageTexture;
+    return window->win32.dxgi.swapchainImageTexture;
 }
 
 uint64_t _glfwGetWindowSwapchainImageHandleWin32(_GLFWwindow *window) {
-    return window->win32.dxgiSwapchainImageHandle;
+    return window->win32.dxgi.swapchainImageHandle;
 }
 
 #endif // _GLFW_WIN32

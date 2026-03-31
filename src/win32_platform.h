@@ -376,6 +376,35 @@ typedef struct _GLFWlibraryWGL
     GLFWbool                            ARB_context_flush_control;
 } _GLFWlibraryWGL;
 
+typedef struct _GLFWDXGIFallbackWin32
+{
+    GLFWbool            swapchainFallback;
+    GLFWbool            swapchainForce;
+    GLFWbool            interopActive;
+    GLFWbool            allowTearing;
+    GLFWbool            usesHelperContext;
+    int                 swapInterval;
+    HDC                 wglDC;
+    HGLRC               wglRC;
+    uint32_t            swapchainImageTexture;
+    uint64_t            swapchainImageHandle;
+    void*               device;
+    void*               deviceContext;
+    void*               swapchain;
+    void*               backBuffer;
+    void*               interopTexture;
+    void*               flipVertexShader;
+    void*               flipPixelShader;
+    void*               flipSamplerState;
+    void*               flipShaderResourceView;
+    void*               flipRenderTargetView;
+    void*               interopDevice;
+    void*               interopObject;
+    uint32_t            swapchainFormat;
+    uint32_t            colorPrimaries;
+    uint32_t            colorTransfer;
+} _GLFWDXGIFallbackWin32;
+
 // Win32-specific per-window data
 //
 typedef struct _GLFWwindowWin32
@@ -393,31 +422,7 @@ typedef struct _GLFWwindowWin32
     GLFWbool            scaleToMonitor;
     GLFWbool            keymenu;
     GLFWbool            showDefault;
-    GLFWbool            dxgiSwapchainFallback;
-    GLFWbool            dxgiSwapchainForce;
-    GLFWbool            dxgiInteropActive;
-    GLFWbool            dxgiAllowTearing;
-    GLFWbool            dxgiUsesHelperContext;
-    int                 dxgiSwapInterval;
-    HDC                 dxgiWglDC;
-    HGLRC               dxgiWglRC;
-    uint32_t            dxgiSwapchainImageTexture;
-    uint64_t            dxgiSwapchainImageHandle;
-    void*               dxgiDevice;
-    void*               dxgiDeviceContext;
-    void*               dxgiSwapchain;
-    void*               dxgiBackBuffer;
-    void*               dxgiInteropTexture;
-    void*               dxgiFlipVertexShader;
-    void*               dxgiFlipPixelShader;
-    void*               dxgiFlipSamplerState;
-    void*               dxgiFlipShaderResourceView;
-    void*               dxgiFlipRenderTargetView;
-    void*               dxgiInteropDevice;
-    void*               dxgiInteropObject;
-    uint32_t            dxgiSwapchainFormat;
-    uint32_t            dxgiColorPrimaries;
-    uint32_t            dxgiColorTransfer;
+    _GLFWDXGIFallbackWin32 dxgi;
     GLFWbool            external;
     LONG_PTR            externalWindowProc;
 

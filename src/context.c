@@ -666,7 +666,7 @@ GLFWAPI void glfwSwapBuffers(GLFWwindow* handle)
     }
 
 #if defined(_GLFW_WIN32)
-    if (window->win32.dxgiInteropActive)
+    if (window->win32.dxgi.interopActive)
     {
         _glfwSwapBuffersDXGIFallbackWin32(window);
         return;
@@ -691,9 +691,9 @@ GLFWAPI void glfwSwapInterval(int interval)
     }
 
 #if defined(_GLFW_WIN32)
-    if (window->win32.dxgiInteropActive)
+    if (window->win32.dxgi.interopActive)
     {
-        window->win32.dxgiSwapInterval = interval;
+        window->win32.dxgi.swapInterval = interval;
         return;
     }
 #endif

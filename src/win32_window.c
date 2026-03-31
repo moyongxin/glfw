@@ -1446,7 +1446,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
                 window->win32.width = width;
                 window->win32.height = height;
 
-                if (window->win32.dxgiInteropActive)
+                if (window->win32.dxgi.interopActive)
                     _glfwResizeDXGIFallbackWin32(window, width, height);
 
                 _glfwInputFramebufferSize(window, width, height);
@@ -1822,8 +1822,8 @@ static int createNativeWindow(_GLFWwindow* window,
     window->win32.scaleToMonitor = wndconfig->scaleToMonitor;
     window->win32.keymenu = wndconfig->win32.keymenu;
     window->win32.showDefault = wndconfig->win32.showDefault;
-    window->win32.dxgiSwapchainFallback = wndconfig->win32.dxgiSwapchainFallback;
-    window->win32.dxgiSwapchainForce = wndconfig->win32.dxgiSwapchainForce;
+    window->win32.dxgi.swapchainFallback = wndconfig->win32.dxgiSwapchainFallback;
+    window->win32.dxgi.swapchainForce = wndconfig->win32.dxgiSwapchainForce;
 
     if (!window->monitor)
     {
@@ -1915,8 +1915,8 @@ GLFWbool _glfwCreateWindowWin32(_GLFWwindow* window,
             wglCreated = _glfwCreateContextWGL(window, ctxconfig, fbconfig);
             if (!wglCreated)
             {
-                if (window->win32.dxgiSwapchainFallback ||
-                    window->win32.dxgiSwapchainForce)
+                if (window->win32.dxgi.swapchainFallback ||
+                    window->win32.dxgi.swapchainForce)
                 {
                     if (!_glfwCreateDXGIFallbackWin32(window, ctxconfig, fbconfig))
                         return GLFW_FALSE;
@@ -1924,7 +1924,7 @@ GLFWbool _glfwCreateWindowWin32(_GLFWwindow* window,
                 else
                     return GLFW_FALSE;
             }
-            else if (window->win32.dxgiSwapchainForce)
+            else if (window->win32.dxgi.swapchainForce)
             {
                 if (!_glfwCreateDXGIFallbackWin32(window, ctxconfig, fbconfig))
                     return GLFW_FALSE;
@@ -1945,7 +1945,7 @@ GLFWbool _glfwCreateWindowWin32(_GLFWwindow* window,
                 return GLFW_FALSE;
         }
 
-        if (!window->win32.dxgiUsesHelperContext)
+        if (!window->win32.dxgi.usesHelperContext)
         {
             if (!_glfwRefreshContextAttribs(window, ctxconfig))
                 return GLFW_FALSE;
@@ -2300,16 +2300,16 @@ float _glfwGetWindowMaxLuminanceWin32(_GLFWwindow* window) {
 
 uint32_t _glfwGetWindowPrimariesWin32(_GLFWwindow* window)
 {
-    if (window->win32.dxgiInteropActive && window->win32.dxgiColorPrimaries)
-        return window->win32.dxgiColorPrimaries;
+    if (window->win32.dxgi.interopActive && window->win32.dxgi.colorPrimaries)
+        return window->win32.dxgi.colorPrimaries;
 
     return 1; // sRGB
 }
 
 uint32_t _glfwGetWindowTransferWin32(_GLFWwindow* window)
 {
-    if (window->win32.dxgiInteropActive && window->win32.dxgiColorTransfer)
-        return window->win32.dxgiColorTransfer;
+    if (window->win32.dxgi.interopActive && window->win32.dxgi.colorTransfer)
+        return window->win32.dxgi.colorTransfer;
 
     // If we managed to get a fp16 frame buffer on Windows, we need to output scRGB
     // i.e. linear colors w/ sRGB primaries.
@@ -3378,8 +3378,8 @@ GLFWAPI GLFWwindow* glfwAttachWin32Window(HWND handle, GLFWwindow* share)
     window->win32.externalWindowProc =
         GetWindowLongPtrW(window->win32.handle, GWLP_WNDPROC);
     SetWindowLongPtrW(window->win32.handle, GWLP_WNDPROC, (LONG_PTR) windowProc);
-    window->win32.dxgiSwapchainFallback = wndconfig.win32.dxgiSwapchainFallback;
-    window->win32.dxgiSwapchainForce = wndconfig.win32.dxgiSwapchainForce;
+    window->win32.dxgi.swapchainFallback = wndconfig.win32.dxgiSwapchainFallback;
+    window->win32.dxgi.swapchainForce = wndconfig.win32.dxgiSwapchainForce;
 
     {
         const DWORD style = GetWindowLongW(window->win32.handle, GWL_STYLE);
@@ -3407,8 +3407,8 @@ GLFWAPI GLFWwindow* glfwAttachWin32Window(HWND handle, GLFWwindow* share)
             wglCreated = _glfwCreateContextWGL(window, &ctxconfig, &fbconfig);
             if (!wglCreated)
             {
-                if (window->win32.dxgiSwapchainFallback ||
-                    window->win32.dxgiSwapchainForce)
+                if (window->win32.dxgi.swapchainFallback ||
+                    window->win32.dxgi.swapchainForce)
                 {
                     if (!_glfwCreateDXGIFallbackWin32(window, &ctxconfig, &fbconfig))
                         return GLFW_FALSE;
@@ -3416,7 +3416,7 @@ GLFWAPI GLFWwindow* glfwAttachWin32Window(HWND handle, GLFWwindow* share)
                 else
                     return GLFW_FALSE;
             }
-            else if (window->win32.dxgiSwapchainForce)
+            else if (window->win32.dxgi.swapchainForce)
             {
                 if (!_glfwCreateDXGIFallbackWin32(window, &ctxconfig, &fbconfig))
                     return GLFW_FALSE;
@@ -3439,7 +3439,7 @@ GLFWAPI GLFWwindow* glfwAttachWin32Window(HWND handle, GLFWwindow* share)
     }
 
     if (ctxconfig.client != GLFW_NO_API &&
-        !window->win32.dxgiUsesHelperContext)
+        !window->win32.dxgi.usesHelperContext)
     {
         if (!_glfwRefreshContextAttribs(window, &ctxconfig))
         {
