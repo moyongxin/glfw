@@ -914,7 +914,7 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
 
     interopObject =
         _wglDXRegisterObjectNV(interopDevice, shared, texture, GL_TEXTURE_2D,
-                               WGL_ACCESS_READ_WRITE_NV);
+                               WGL_ACCESS_WRITE_DISCARD_NV);
     if (!interopObject) {
         GLuint temp = texture;
         PFNGLDELETETEXTURESPROC DeleteTextures =
