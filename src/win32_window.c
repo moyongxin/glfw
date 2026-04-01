@@ -2094,8 +2094,8 @@ void _glfwSetWindowPosWin32(_GLFWwindow* window, int xpos, int ypos)
 }
 
 float _glfwGetWindowSdrWhiteLevelWin32(_GLFWwindow* window) {
-    if (window->bitsPerSample != 16) {
-        // If we don't have a fp16 frame buffer, Windows does not expect scRGB
+    if (window->bitsPerSample <= 8) {
+        // If we don't have a bpc > 8 frame buffer, Windows does not expect scRGB
         // with proper SDR white level scaling, it instead expects standard
         // sRGB whose reference white level should be 80 nits. (Even though the
         // screen's reference white level -- obtained by the bottom code --
@@ -2197,12 +2197,15 @@ float _glfwGetWindowSdrWhiteLevelWin32(_GLFWwindow* window) {
 }
 
 float _glfwGetWindowMinLuminanceWin32(_GLFWwindow* window) {
+    if (window->win32.dxgi.interopActive) {
+        return _glfwGetWindowMinLuminanceDXGIWin32(window);
+    }
     return 0.0f;
 }
 
 GLFWbool _glfwGetWindowAdvancedColorEnabledWin32(_GLFWwindow* window) {
-    if (window->bitsPerSample != 16) {
-        // If we don't have a fp16 frame buffer, Windows does not expect scRGB
+    if (window->bitsPerSample <= 8) {
+        // If we don't have a bpc > 8 frame buffer, Windows does not expect scRGB
         // with proper SDR white level scaling, it instead expects standard
         // sRGB whose reference white level should be 80 nits. (Even though the
         // screen's reference white level -- obtained by the bottom code --
@@ -2290,6 +2293,9 @@ GLFWbool _glfwGetWindowAdvancedColorEnabledWin32(_GLFWwindow* window) {
 }
 
 float _glfwGetWindowMaxLuminanceWin32(_GLFWwindow* window) {
+    if (window->win32.dxgi.interopActive) {
+        return _glfwGetWindowMaxLuminanceDXGIWin32(window);
+    }
     // If advanced color is not enabled, return standard sRGB max luminance (not HDR).
     // Otherwise return 0.0 to indicate no known limit.
     return _glfwGetWindowAdvancedColorEnabledWin32(window) ? 0.0f : 80.0f;

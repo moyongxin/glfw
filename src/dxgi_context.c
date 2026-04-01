@@ -33,6 +33,7 @@
 #include <d3d11.h>
 #include <dxgi.h>
 #include <dxgi1_4.h>
+#include <dxgi1_6.h>
 #include <stddef.h>
 #include "flipy.vs.h"
 #include "flipy.ps.h"
@@ -962,6 +963,30 @@ static GLFWbool createInteropSurface(_GLFWwindow *window, int width,
     return GLFW_TRUE;
 }
 
+static DXGI_OUTPUT_DESC1 getOutputDesc(IDXGISwapChain *swapchain) {
+    IDXGIOutput *output = NULL;
+    IDXGIOutput6 *output6 = NULL;
+    DXGI_OUTPUT_DESC1 desc = {0};
+    HRESULT hr;
+
+    hr = IDXGISwapChain_GetContainingOutput(swapchain, &output);
+    if (FAILED(hr))
+        return desc;
+
+    hr = IDXGIOutput_QueryInterface(output, &IID_IDXGIOutput6, (void**)&output6);
+    if (SUCCEEDED(hr)) {
+        hr = IDXGIOutput6_GetDesc1(output6, &desc);
+        IDXGIOutput6_Release(output6);
+    }
+
+    IDXGIOutput_Release(output);
+    if (FAILED(hr))
+        ZeroMemory(&desc, sizeof(desc));
+
+    return desc;
+
+}
+
 GLFWbool _glfwCreateDXGIFallbackWin32(_GLFWwindow *window,
                                       const _GLFWctxconfig *ctxconfig,
                                       const _GLFWfbconfig *fbconfig) {
@@ -1173,6 +1198,16 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
         disableDXGIFallbackWin32(window, "lock interop object", E_FAIL);
         return;
     }
+}
+
+float _glfwGetWindowMaxLuminanceDXGIWin32(_GLFWwindow *window) {
+    DXGI_OUTPUT_DESC1 outputDesc = getOutputDesc((IDXGISwapChain *)window->win32.dxgi.swapchain);
+    return outputDesc.MaxLuminance;
+}
+
+float _glfwGetWindowMinLuminanceDXGIWin32(_GLFWwindow *window) {
+    DXGI_OUTPUT_DESC1 outputDesc = getOutputDesc((IDXGISwapChain *)window->win32.dxgi.swapchain);
+    return outputDesc.MinLuminance;
 }
 
 uint32_t _glfwGetWindowSwapchainImageTextureWin32(_GLFWwindow *window) {

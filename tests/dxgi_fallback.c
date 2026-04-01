@@ -205,6 +205,10 @@ int main(void) {
     }
     glfwSwapInterval(0);
 
+    float maxLuminance = glfwGetWindowMaxLuminance(window);
+    float minLuminance = glfwGetWindowMinLuminance(window);
+    float sdrReferenceWhite = glfwGetWindowSdrWhiteLevel(window);
+
     texture = glfwGetWindowSwapchainImageTexture(window);
     imageHandle = glfwGetWin32SwapchainImageHandle(window);
 

@@ -562,6 +562,8 @@ GLFWbool _glfwCreateDXGIFallbackWin32(_GLFWwindow* window,
 void _glfwDestroyDXGIFallbackWin32(_GLFWwindow* window);
 void _glfwResizeDXGIFallbackWin32(_GLFWwindow* window, int width, int height);
 void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow* window);
+float _glfwGetWindowMaxLuminanceDXGIWin32(_GLFWwindow *window);
+float _glfwGetWindowMinLuminanceDXGIWin32(_GLFWwindow *window);
 uint32_t _glfwGetWindowSwapchainImageTextureWin32(_GLFWwindow* window);
 uint64_t _glfwGetWindowSwapchainImageHandleWin32(_GLFWwindow* window);
 void _glfwSetWindowTitleWin32(_GLFWwindow* window, const char* title);
