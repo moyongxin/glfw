@@ -135,8 +135,8 @@ static void assignWindowColorStateFromFormat(_GLFWwindow *window,
         window->win32.dxgi.colorTransfer = 5;
     } else if (format == DXGI_FORMAT_R10G10B10A2_UNORM) { // PQ + 10-bit UNORM
         window->bitsPerSample = 10;
-        window->win32.dxgi.colorPrimaries = 9;
-        window->win32.dxgi.colorTransfer = 16;
+        window->win32.dxgi.colorPrimaries = 6;
+        window->win32.dxgi.colorTransfer = 11;
     } else { // sRGB + 8-bit UNORM
         window->bitsPerSample = 8;
         window->win32.dxgi.colorPrimaries = 1;
@@ -158,8 +158,8 @@ static void configureSwapchainColorSpace(_GLFWwindow *window,
     if (window->win32.dxgi.colorPrimaries == 1 &&
         window->win32.dxgi.colorTransfer == 5) {
         requested = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709; // linear scRGB
-    } else if (window->win32.dxgi.colorPrimaries == 9 &&
-               window->win32.dxgi.colorTransfer == 16) {
+    } else if (window->win32.dxgi.colorPrimaries == 6 &&
+               window->win32.dxgi.colorTransfer == 11) {
         requested =
             DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020; // HDR10 (PQ + BT.2020)
     } else {
@@ -198,8 +198,8 @@ static void configureSwapchainColorSpace(_GLFWwindow *window,
             window->win32.dxgi.colorTransfer = 5;
         } else if (SUCCEEDED(hr) &&
                    requested == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020) {
-            window->win32.dxgi.colorPrimaries = 9;
-            window->win32.dxgi.colorTransfer = 16;
+            window->win32.dxgi.colorPrimaries = 6;
+            window->win32.dxgi.colorTransfer = 11;
         }
     } else if (requested == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709) {
         _glfwInputError(
