@@ -1945,11 +1945,8 @@ GLFWbool _glfwCreateWindowWin32(_GLFWwindow* window,
                 return GLFW_FALSE;
         }
 
-        if (!window->win32.dxgi.usesHelperContext)
-        {
-            if (!_glfwRefreshContextAttribs(window, ctxconfig))
-                return GLFW_FALSE;
-        }
+        if (!_glfwRefreshContextAttribs(window, ctxconfig))
+            return GLFW_FALSE;
     }
 
     if (wndconfig->mousePassthrough)
