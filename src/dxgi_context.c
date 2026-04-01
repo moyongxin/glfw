@@ -1182,9 +1182,7 @@ void _glfwSwapBuffersDXGIFallbackWin32(_GLFWwindow *window) {
         presentFlags |= DXGI_PRESENT_ALLOW_TEARING;
 
     hr = IDXGISwapChain_Present(swapchain, (UINT)interval, presentFlags);
-    if (hr == DXGI_STATUS_OCCLUDED) {
-        // Window is occluded; keep fallback active and try again later.
-    } else if (FAILED(hr)) {
+    if (FAILED(hr)) {
         if (handleDXGIError(window, "present", hr)) {
             return;
         }
