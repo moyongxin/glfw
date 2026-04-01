@@ -807,18 +807,18 @@ static HRESULT renderFlipToBackBuffer(_GLFWwindow *window,
         (ID3D11ShaderResourceView *)window->win32.dxgi.flipShaderResourceView;
     ID3D11RenderTargetView *rtv =
         (ID3D11RenderTargetView *)window->win32.dxgi.flipRenderTargetView;
-    D3D11_TEXTURE2D_DESC backBufferDesc;
     D3D11_VIEWPORT viewport;
 
     if (!context || !backBuffer || !vs || !ps || !srv || !rtv)
         return E_FAIL;
 
-    ID3D11Texture2D_GetDesc(backBuffer, &backBufferDesc);
-
     viewport.TopLeftX = 0.0f;
     viewport.TopLeftY = 0.0f;
-    viewport.Width = (FLOAT)backBufferDesc.Width;
-    viewport.Height = (FLOAT)backBufferDesc.Height;
+
+    int width, height;
+    _glfwGetWindowSizeWin32(window, &width, &height);
+    viewport.Width = (FLOAT)width;
+    viewport.Height = (FLOAT)height;
     viewport.MinDepth = 0.0f;
     viewport.MaxDepth = 1.0f;
 
